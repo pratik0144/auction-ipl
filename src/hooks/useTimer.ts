@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export function useTimer(endsAt: string | null, isPaused: boolean = false) {
+export function useTimer(
+  endsAt: string | null,
+  isPaused: boolean = false,
+  totalSeconds?: number
+) {
   const [secondsRemaining, setSecondsRemaining] = useState(0);
   const [progress, setProgress] = useState(1);
   const rafRef = useRef<number>(0);
@@ -32,12 +36,15 @@ export function useTimer(endsAt: string | null, isPaused: boolean = false) {
       return;
     }
 
-    // Estimate total duration on first set (assume timer was just started
-    // if remaining is close to a common timer value)
+    // Prefer the room's actual configured timer for an accurate ring; only
+    // fall back to a heuristic if no duration was provided.
     const endTime = new Date(endsAt).getTime();
     const remaining = Math.max(0, (endTime - Date.now()) / 1000);
-    // Snap to the nearest common timer duration
-    if (remaining > 25) totalDurationRef.current = 30;
+    if (totalSeconds && totalSeconds > 0) {
+      // The ring should never read as "more than full" if a bid extended the
+      // window beyond the base duration — use the larger of the two.
+      totalDurationRef.current = Math.max(totalSeconds, remaining);
+    } else if (remaining > 25) totalDurationRef.current = 30;
     else if (remaining > 15) totalDurationRef.current = 20;
     else totalDurationRef.current = Math.max(remaining, 10);
 
@@ -46,7 +53,7 @@ export function useTimer(endsAt: string | null, isPaused: boolean = false) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [endsAt, isPaused, tick]);
+  }, [endsAt, isPaused, tick, totalSeconds]);
 
   const isExpired = !isPaused && endsAt !== null && secondsRemaining <= 0;
   const isUrgent = secondsRemaining > 0 && secondsRemaining <= 10;
