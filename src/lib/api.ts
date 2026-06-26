@@ -2,6 +2,7 @@ import { createClient } from './supabase/client';
 import type {
   ApiResponse,
   Room,
+  RoomStatus,
   RoomParticipant,
   RoomPlayer,
   Player,
@@ -201,6 +202,83 @@ export async function getRoomSnapshot(
     },
     error: null,
   };
+}
+
+// ============================================================
+// Room discovery (rooms hub)
+// ============================================================
+
+export interface PublicRoomSummary {
+  id: string;
+  room_code: string;
+  room_name: string;
+  status: RoomStatus;
+  participant_count: number;
+}
+
+export interface MyRoomSummary {
+  id: string;
+  room_code: string;
+  room_name: string;
+  status: RoomStatus;
+  squad_name: string;
+}
+
+/** Open (LOBBY) rooms anyone can join. No private flag exists, so all open
+ *  rooms are discoverable. */
+export async function listPublicRooms(): Promise<ApiResponse<PublicRoomSummary[]>> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('id, room_code, room_name, status, created_at, room_participants(count)')
+    .eq('status', 'LOBBY')
+    .order('created_at', { ascending: false })
+    .limit(24);
+  if (error) return { data: null, error: error.message };
+
+  type Row = {
+    id: string;
+    room_code: string;
+    room_name: string;
+    status: RoomStatus;
+    room_participants: { count: number }[] | null;
+  };
+  const rooms = ((data ?? []) as unknown as Row[]).map((r) => ({
+    id: r.id,
+    room_code: r.room_code,
+    room_name: r.room_name,
+    status: r.status,
+    participant_count: r.room_participants?.[0]?.count ?? 0,
+  }));
+  return { data: rooms, error: null };
+}
+
+/** Rooms the current user has joined (any status), newest first. */
+export async function listMyRooms(userId: string): Promise<ApiResponse<MyRoomSummary[]>> {
+  if (!userId) return { data: [], error: null };
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('room_participants')
+    .select('squad_name, joined_at, room:rooms(id, room_code, room_name, status)')
+    .eq('user_id', userId)
+    .order('joined_at', { ascending: false })
+    .limit(24);
+  if (error) return { data: null, error: error.message };
+
+  type Row = {
+    squad_name: string;
+    room: { id: string; room_code: string; room_name: string; status: RoomStatus } | null;
+  };
+  const rooms = ((data ?? []) as unknown as Row[])
+    .filter((p) => p.room)
+    .map((p) => ({
+      id: p.room!.id,
+      room_code: p.room!.room_code,
+      room_name: p.room!.room_name,
+      status: p.room!.status,
+      squad_name: p.squad_name,
+    }));
+  return { data: rooms, error: null };
 }
 
 export async function getRoomResults(roomId: string) {
