@@ -9,47 +9,31 @@ interface BidHistoryProps {
 }
 
 /**
- * Horizontal timeline showing the latest 5 bids as chips/pills.
- * The highest (newest) bid sits in the center with emphasis;
- * older bids fan out left/right, progressively fading.
- * Fixed height prevents layout shift during rapid bidding.
+ * Compact, center-anchored bid history. The latest (highest) bid sits in the
+ * CENTER; older bids fan out left/right and fade. Fixed-width slots (with
+ * spacers) keep the center fixed so the newest bid never drifts off-screen.
+ * Text only — name + amount, no boxes/animations.
  */
 export default function BidHistory({ bids, participants }: BidHistoryProps) {
   if (!bids || bids.length === 0) {
     return (
-      <div className="flex items-center justify-center h-14 text-muted text-sm">
+      <div className="flex items-center justify-center text-muted text-sm">
         No bids yet — be the first!
       </div>
     );
   }
 
-  const participantMap = new Map(
-    participants.map((p) => [p.id, p])
-  );
+  const participantMap = new Map(participants.map((p) => [p.id, p]));
 
-  // Sorted by amount DESC → highest (newest) first
-  const sorted = [...bids].sort(
-    (a, b) => b.amount_lakhs - a.amount_lakhs
-  );
+  // Highest (latest) first.
+  const visible = [...bids]
+    .sort((a, b) => b.amount_lakhs - a.amount_lakhs)
+    .slice(0, 5);
 
-  // Take latest 5
-  const visible = sorted.slice(0, 5);
-
-  // Styling per distance from center — center chip is prominent
-  const chipStyle = (distFromCenter: number, isCenter: boolean) => {
-    if (isCenter) {
-      return 'bg-amber/15 border border-amber/40 scale-105 text-amber shadow-[0_0_16px_rgba(245,197,66,0.18)]';
-    }
-    const opacity = distFromCenter === 1 ? 'opacity-80' : 'opacity-55';
-    const scale = distFromCenter === 1 ? 'scale-100' : 'scale-95';
-    return `bg-surface border border-hairline ${opacity} ${scale} text-body`;
-  };
-
-  // Layout chips so the highest bid is in the center.
-  // 5 slots: [ slot-2  slot-1  CENTER  slot+1  slot+2 ]
-  const ordered: (typeof visible[number] | null)[] = new Array(5).fill(null);
+  // Place the highest in the center, older bids alternating outward:
+  // [ #4  #2  CENTER(#1)  #3  #5 ]
+  const ordered: (Bid | null)[] = [null, null, null, null, null];
   const centerIdx = 2;
-
   if (visible[0]) ordered[centerIdx] = visible[0];
   if (visible[1]) ordered[centerIdx - 1] = visible[1];
   if (visible[2]) ordered[centerIdx + 1] = visible[2];
@@ -57,39 +41,35 @@ export default function BidHistory({ bids, participants }: BidHistoryProps) {
   if (visible[4]) ordered[centerIdx + 2] = visible[4];
 
   return (
-    <div className="flex items-center justify-center gap-2 h-14 overflow-hidden">
+    <div className="flex items-center justify-center gap-1 overflow-hidden">
       {ordered.map((bid, slotIdx) => {
         if (!bid) {
-          // Invisible spacer to maintain centering
-          return <div key={`slot-${slotIdx}`} className="w-20" />;
+          // Spacer keeps the center slot truly centered.
+          return <div key={`slot-${slotIdx}`} className="w-20 shrink-0" />;
         }
 
-        const distFromCenter = Math.abs(slotIdx - centerIdx);
+        const dist = Math.abs(slotIdx - centerIdx);
         const isCenter = slotIdx === centerIdx;
         const p = bid.participant ?? participantMap.get(bid.participant_id);
-        const squadName = p?.squad_name || 'Unknown';
-        const displayName =
-          squadName.length > 10 ? squadName.slice(0, 9) + '…' : squadName;
+        const rawName = p?.display_name || 'Unknown';
+        const name = rawName.length > 9 ? rawName.slice(0, 8) + '…' : rawName;
+        const fade = isCenter ? '' : dist === 1 ? 'opacity-70' : 'opacity-40';
 
         return (
           <div
             key={bid.id}
-            className={`flex flex-col items-center px-3 py-1.5 rounded-lg will-change-[transform,opacity] ${chipStyle(distFromCenter, isCenter)} ${
-              isCenter
-                ? 'animate-chip-enter'
-                : 'transition-all duration-300 ease-out'
-            }`}
+            className={`w-20 shrink-0 flex flex-col items-center leading-tight transition-opacity duration-300 ${fade}`}
           >
             <span
-              className={`truncate max-w-[6rem] text-[11px] leading-tight ${
-                isCenter ? 'font-semibold text-amber' : 'font-medium'
+              className={`truncate max-w-full text-[11px] ${
+                isCenter ? 'text-chalk font-medium' : 'text-muted'
               }`}
             >
-              {displayName}
+              {name}
             </span>
             <span
-              className={`font-mono font-semibold leading-tight ${
-                isCenter ? 'text-sm text-amber' : 'text-xs text-body'
+              className={`font-mono ${
+                isCenter ? 'text-sm font-semibold text-amber' : 'text-xs text-muted'
               }`}
             >
               {formatPrice(bid.amount_lakhs)}
