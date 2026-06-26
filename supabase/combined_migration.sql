@@ -33,6 +33,8 @@ CREATE TABLE rooms (
   purse_budget_lakhs        int           NOT NULL DEFAULT 12000,
   max_squad_size            int           NOT NULL DEFAULT 18,
   bid_timer_seconds         int           NOT NULL DEFAULT 30,
+  is_public                 boolean       NOT NULL DEFAULT true,
+  player_order              text          NOT NULL DEFAULT 'RANDOM' CHECK (player_order IN ('RANDOM','CATEGORY')),
   current_player_order_index int,
   created_at                timestamptz   NOT NULL DEFAULT now()
 );
@@ -108,7 +110,9 @@ CREATE OR REPLACE FUNCTION create_room(
   p_admin_user_id uuid,
   p_purse_budget_lakhs int DEFAULT 12000,
   p_max_squad_size int DEFAULT 18,
-  p_bid_timer_seconds int DEFAULT 30
+  p_bid_timer_seconds int DEFAULT 30,
+  p_is_public boolean DEFAULT true,
+  p_player_order text DEFAULT 'RANDOM'
 ) RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -118,14 +122,15 @@ DECLARE
   v_room_code varchar(6);
   v_room_id uuid;
   v_participant_id uuid;
+  v_order text := CASE WHEN p_player_order = 'CATEGORY' THEN 'CATEGORY' ELSE 'RANDOM' END;
 BEGIN
   LOOP
     v_room_code := upper(substr(md5(random()::text), 1, 6));
     EXIT WHEN NOT EXISTS (SELECT 1 FROM rooms WHERE room_code = v_room_code);
   END LOOP;
 
-  INSERT INTO rooms (room_code, room_name, admin_user_id, purse_budget_lakhs, max_squad_size, bid_timer_seconds)
-  VALUES (v_room_code, p_room_name, p_admin_user_id, p_purse_budget_lakhs, p_max_squad_size, p_bid_timer_seconds)
+  INSERT INTO rooms (room_code, room_name, admin_user_id, purse_budget_lakhs, max_squad_size, bid_timer_seconds, is_public, player_order)
+  VALUES (v_room_code, p_room_name, p_admin_user_id, p_purse_budget_lakhs, p_max_squad_size, p_bid_timer_seconds, p_is_public, v_order)
   RETURNING id INTO v_room_id;
 
   INSERT INTO room_participants (room_id, user_id, display_name, squad_name, remaining_budget_lakhs)
@@ -182,6 +187,43 @@ BEGIN
 END;
 $$;
 
+-- Builds the auction order. CATEGORY = high-dopamine weighted interleave
+-- (top+medium tier drawn ~75%, low ~25%, randomised so it never repeats).
+CREATE OR REPLACE FUNCTION seed_room_players(p_room_id uuid, p_strategy text)
+RETURNS int
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  himed uuid[]; low uuid[]; ordered uuid[] := '{}';
+  n_h int; n_l int; i_h int := 1; i_l int := 1; v_count int;
+BEGIN
+  IF p_strategy = 'CATEGORY' THEN
+    SELECT array_agg(id ORDER BY random()) INTO himed FROM players WHERE COALESCE(rating, 0) >= 6;
+    SELECT array_agg(id ORDER BY random()) INTO low   FROM players WHERE COALESCE(rating, 0) < 6;
+    n_h := COALESCE(array_length(himed, 1), 0);
+    n_l := COALESCE(array_length(low, 1), 0);
+    WHILE i_h <= n_h OR i_l <= n_l LOOP
+      IF i_l > n_l THEN
+        ordered := array_append(ordered, himed[i_h]); i_h := i_h + 1;
+      ELSIF i_h > n_h THEN
+        ordered := array_append(ordered, low[i_l]); i_l := i_l + 1;
+      ELSIF random() < 0.75 THEN
+        ordered := array_append(ordered, himed[i_h]); i_h := i_h + 1;
+      ELSE
+        ordered := array_append(ordered, low[i_l]); i_l := i_l + 1;
+      END IF;
+    END LOOP;
+    INSERT INTO room_players (room_id, player_id, order_index)
+    SELECT p_room_id, t.pid, t.ord FROM unnest(ordered) WITH ORDINALITY AS t(pid, ord);
+    v_count := COALESCE(array_length(ordered, 1), 0);
+  ELSE
+    INSERT INTO room_players (room_id, player_id, order_index)
+    SELECT p_room_id, id, row_number() OVER (ORDER BY random()) FROM players;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+  END IF;
+  RETURN v_count;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION start_auction(
   p_room_id uuid,
   p_admin_user_id uuid
@@ -207,11 +249,7 @@ BEGIN
 
   v_timer_seconds := v_room.bid_timer_seconds;
 
-  INSERT INTO room_players (room_id, player_id, order_index)
-  SELECT p_room_id, id, row_number() OVER (ORDER BY random())
-  FROM players;
-
-  GET DIAGNOSTICS v_total_players = ROW_COUNT;
+  v_total_players := seed_room_players(p_room_id, COALESCE(v_room.player_order, 'RANDOM'));
 
   UPDATE rooms SET status = 'AUCTION', current_player_order_index = 1 WHERE id = p_room_id;
 

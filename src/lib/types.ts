@@ -5,6 +5,7 @@
 // Database enums as string unions
 export type RoomStatus = 'LOBBY' | 'AUCTION' | 'PAUSED' | 'COMPLETED';
 export type AuctionPlayerStatus = 'PENDING' | 'ACTIVE' | 'SOLD' | 'UNSOLD';
+export type PlayerOrder = 'RANDOM' | 'CATEGORY';
 export type PlayerRole = 'Batter' | 'Wicketkeeper-Batter' | 'All-rounder' | 'Pace Bowler' | 'Spin Bowler' | 'Bowler';
 
 // Database row types
@@ -30,6 +31,8 @@ export interface Room {
   purse_budget_lakhs: number;
   max_squad_size: number;
   bid_timer_seconds: number;
+  is_public: boolean;
+  player_order: PlayerOrder;
   current_player_order_index: number | null;
   created_at: string;
 }
@@ -99,6 +102,8 @@ export interface CreateRoomRequest {
   purse_budget_lakhs?: number;
   max_squad_size?: number;
   bid_timer_seconds?: number;
+  is_public?: boolean;
+  player_order?: PlayerOrder;
 }
 
 export interface JoinRoomRequest {

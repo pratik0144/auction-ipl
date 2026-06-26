@@ -53,24 +53,34 @@ export default function RoomPage({
     );
   }
 
-  // Not a participant — show a message
+  // Not a participant — public rooms can be joined here; private rooms require
+  // the host's invite link (we don't leak the code for someone who guessed the id).
   if (!participant) {
+    const isPublic = snapshot.room.is_public;
+    const joinable = isPublic && snapshot.room.status === 'LOBBY';
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="card max-w-md text-center animate-fade-in">
           <p className="text-3xl mb-3">🔒</p>
           <h2 className="font-display text-xl font-semibold tracking-[-0.02em] mb-2">
-            Not a participant
+            {isPublic ? 'Not a participant' : 'Private room'}
           </h2>
           <p className="text-muted text-sm mb-4">
-            You haven&apos;t joined this room yet.
+            {!isPublic
+              ? 'This is a private room. You need an invite link from the host to join.'
+              : joinable
+                ? "You haven't joined this room yet."
+                : 'This auction has already started or finished — you can no longer join.'}
           </p>
-          <Link
-            href={`/join/${snapshot.room.room_code}`}
-            className="btn-primary"
-          >
-            Join Room
-          </Link>
+          {isPublic && joinable ? (
+            <Link href={`/join/${snapshot.room.room_code}`} className="btn-primary">
+              Join Room
+            </Link>
+          ) : (
+            <Link href="/" className="btn-outline">
+              Go Home
+            </Link>
+          )}
         </div>
       </div>
     );

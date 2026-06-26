@@ -43,6 +43,8 @@ export async function createRoom(
     p_purse_budget_lakhs: req.purse_budget_lakhs ?? 12000,
     p_max_squad_size: req.max_squad_size ?? 18,
     p_bid_timer_seconds: req.bid_timer_seconds ?? 30,
+    p_is_public: req.is_public ?? true,
+    p_player_order: req.player_order ?? 'RANDOM',
   });
 }
 
@@ -232,6 +234,7 @@ export async function listPublicRooms(): Promise<ApiResponse<PublicRoomSummary[]
     .from('rooms')
     .select('id, room_code, room_name, status, created_at, room_participants(count)')
     .eq('status', 'LOBBY')
+    .eq('is_public', true)
     .order('created_at', { ascending: false })
     .limit(24);
   if (error) return { data: null, error: error.message };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { RoomSnapshot, RoomPlayer, Player } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
 
@@ -59,11 +60,14 @@ export default function ResultsView({ snapshot }: ResultsViewProps) {
         <p className="text-body mt-2">{room.room_name}</p>
       </div>
 
-      {/* Share button */}
-      <div className="text-center mb-8">
+      {/* Actions */}
+      <div className="flex items-center justify-center gap-3 mb-8">
         <button onClick={handleShare} className="btn-outline">
           {copied ? '✓ Copied!' : '📋 Share Results'}
         </button>
+        <Link href="/" className="btn-primary">
+          Exit to Home
+        </Link>
       </div>
 
       {/* Participant cards */}

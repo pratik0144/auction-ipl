@@ -26,11 +26,8 @@ BEGIN
 
   v_timer_seconds := v_room.bid_timer_seconds;
 
-  INSERT INTO room_players (room_id, player_id, order_index)
-  SELECT p_room_id, id, row_number() OVER (ORDER BY random())
-  FROM players;
-
-  GET DIAGNOSTICS v_total_players = ROW_COUNT;
+  -- Uses the room's chosen ordering strategy (see seed_room_players).
+  v_total_players := seed_room_players(p_room_id, COALESCE(v_room.player_order, 'RANDOM'));
 
   UPDATE rooms SET status = 'AUCTION', current_player_order_index = 1 WHERE id = p_room_id;
 
