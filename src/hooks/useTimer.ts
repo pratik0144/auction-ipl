@@ -1,0 +1,55 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+export function useTimer(endsAt: string | null, isPaused: boolean = false) {
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
+  const [progress, setProgress] = useState(1);
+  const rafRef = useRef<number>(0);
+  const totalDurationRef = useRef<number>(30);
+
+  const tick = useCallback(() => {
+    if (!endsAt || isPaused) {
+      rafRef.current = 0;
+      return;
+    }
+
+    const endTime = new Date(endsAt).getTime();
+    const now = Date.now();
+    const remaining = Math.max(0, (endTime - now) / 1000);
+
+    setSecondsRemaining(Math.ceil(remaining));
+    setProgress(Math.min(1, remaining / totalDurationRef.current));
+
+    if (remaining > 0) {
+      rafRef.current = requestAnimationFrame(tick);
+    }
+  }, [endsAt, isPaused]);
+
+  useEffect(() => {
+    if (!endsAt || isPaused) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return;
+    }
+
+    // Estimate total duration on first set (assume timer was just started
+    // if remaining is close to a common timer value)
+    const endTime = new Date(endsAt).getTime();
+    const remaining = Math.max(0, (endTime - Date.now()) / 1000);
+    // Snap to the nearest common timer duration
+    if (remaining > 25) totalDurationRef.current = 30;
+    else if (remaining > 15) totalDurationRef.current = 20;
+    else totalDurationRef.current = Math.max(remaining, 10);
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [endsAt, isPaused, tick]);
+
+  const isExpired = !isPaused && endsAt !== null && secondsRemaining <= 0;
+  const isUrgent = secondsRemaining > 0 && secondsRemaining <= 10;
+
+  return { secondsRemaining, progress, isExpired, isUrgent };
+}
