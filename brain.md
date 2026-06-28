@@ -561,3 +561,69 @@ Bids are mapped outwards from the center to ensure the latest bid is always high
 * Start the development server using `npm run dev:test`.
 * This sets `NEXT_PUBLIC_DEV_MODE=true` and runs the app on port `3003`.
 * In Dev Mode, a "Bypass" button is displayed on the Lobby page, enabling the admin to start the auction with fewer than 3 participants by calling the custom `start_auction_dev` RPC.
+
+---
+
+## 🆕 9. Session Update — v1.2.0 (authoritative deltas)
+
+> The sections above describe the original scaffold. Where they conflict with
+> this section, **this section wins**. See `CHANGELOG.md` for the full list and
+> `supabase/MIGRATIONS.md` for DB apply order.
+
+### 9.1 Identity & RLS (correction)
+
+There is **no Supabase Auth / login**. The browser holds a `localStorage` UUID
+(`useLocalUser`) and all access uses the **anon** key. RLS is **permissive for
+reads** (`TO anon USING (true)` on `rooms`, `room_participants`, `room_players`,
+`bids`, `players`, `room_chats`); writes go through `SECURITY DEFINER` RPCs.
+The `auth.uid()`-based policies in `002_rls_policies.sql` are **legacy/superseded**.
+
+### 9.2 Realtime balance-sync fix
+
+- Root cause of "balances only update on the admin's screen": realtime tables
+  used the default `REPLICA IDENTITY` (PK only), so RLS-gated `UPDATE` events on
+  `room_participants` weren't delivered to all subscribers.
+- Fix: `REPLICA IDENTITY FULL` on all realtime tables (`006_realtime_fix.sql`)
+  **and** `useRoom` now reconciles the **full snapshot** on every realtime
+  signal (including the `rooms` row, which changes on every resolution).
+
+### 9.3 Room options + access control
+
+- New columns: `rooms.is_public` (bool) and `rooms.player_order`
+  (`'RANDOM' | 'CATEGORY'`). `create_room` accepts `p_is_public`, `p_player_order`.
+- Create page uses **fixed segmented options**: Purse ₹100/150/200/250 Cr,
+  Squad 10/15/20/25, Timer 10/15/20/25/30s, Player order Random/By Category,
+  Public/Private toggle.
+- **Privacy:** `listPublicRooms()` returns only public LOBBY rooms; the room
+  page hides the join CTA / code for private rooms from non-participants
+  (link-tamper guard). Joining a private room requires the host's `/join/{code}`.
+
+### 9.4 Player ordering algorithm — `seed_room_players(room, strategy)`
+
+- `RANDOM` = pure shuffle. `CATEGORY` = weighted interleave by rating tier
+  (top+medium `>= 6` drawn ~75%, low `< 6` ~25%, pools shuffled per game) so
+  stars are sprinkled throughout and the order never repeats. Called by
+  `start_auction` and `start_auction_dev`.
+
+### 9.5 New routes / components / hooks
+
+- **Pages:** `/` (hero + tournament selector), `/rooms` (hub: create/join +
+  Public Rooms + Your Rooms).
+- **API:** `listPublicRooms()`, `listMyRooms(userId)`; snapshot now includes
+  `nextPlayer`.
+- **Components:** `PlayerImage` (headshot + initials fallback, shared);
+  `BalancePanel` hover-to-peek next player (3D flip); `AdminToolbar` relocated
+  into the top-right header (admin-only, AUCTION/PAUSED); `PlayerCard` rebuilt
+  (`name – team`, large bleeding headshot); `BidHistory` center-anchored
+  name+amount; `CountdownTimer` single professional ring; `ResultsView` Exit
+  button.
+- **Hooks:** `useTimer` now takes the real `totalSeconds` for an accurate ring.
+
+### 9.6 Design system
+
+- Theme re-tokenised to a **Vercel-inspired dark** system in `globals.css`:
+  surface ladder (`void`/`surface`/`surface-raised`), `hairline(-strong)`
+  borders, text ladder (`chalk`/`body`/`mute`), `link`-blue interactive accent,
+  a single warm `amber` energy accent (live bid / SOLD), `mesh-gradient` +
+  `eyebrow` utilities, and `Inter` / `JetBrains Mono` fonts. The light/dark
+  toggle was removed (dark-only).

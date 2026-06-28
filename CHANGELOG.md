@@ -4,6 +4,96 @@ All notable changes to the **11Auction** project are documented in this file.
 
 ---
 
+## [1.2.0] - 2026-06-26
+
+A large release: a full Vercel-inspired dark visual redesign, realtime
+correctness fixes, room discovery, configurable room options, an access-control
+model, and a "high-dopamine" auction-ordering algorithm.
+
+### Added
+* **Vercel-inspired design system (`src/app/globals.css`, `src/app/layout.tsx`):**
+  * Re-tokenised the entire theme around a stark, dark, ink-on-near-black surface
+    ladder (`void` / `surface` / `surface-raised`), hairline borders
+    (`hairline`, `hairline-strong`), a calm text ladder (`chalk` / `body` /
+    `mute`), `link`-blue as the interactive accent, and a single warm `amber`
+    energy accent reserved for live-bid / SOLD moments.
+  * Added the brand **mesh gradient** (`mesh-gradient` + `animate-mesh-drift`)
+    as hero-scale decoration, an `eyebrow` mono-caps label utility, stacked
+    elevation shadow variables, and `Inter` (display+body) / `JetBrains Mono`
+    (technical) typography.
+* **Tournament selector on the landing page (`src/app/page.tsx`):** the hero now
+  sits above a "TOURNAMENTS" section with a selectable **IPL 2026** card that
+  routes to the rooms hub.
+* **Rooms hub (`src/app/rooms/page.tsx`):** a discovery page with Create / Join
+  actions, a live **Public Rooms** list (auto-refreshing), and a **Your Rooms**
+  list of rooms the user has joined.
+* **Room discovery APIs (`src/lib/api.ts`):** `listPublicRooms()` (open, public
+  LOBBY rooms with participant counts) and `listMyRooms(userId)`.
+* **Configurable room options (`supabase/migrations/007_room_options.sql`,
+  `src/app/create/page.tsx`):** fixed segmented selectors for Purse
+  (₹100 / 150 / 200 / 250 Cr), Squad size (10 / 15 / 20 / 25), Bid timer
+  (10 / 15 / 20 / 25 / 30s), Player order (Random / By Category), plus a
+  **Public / Private** visibility toggle (`rooms.is_public`).
+* **High-dopamine auction ordering (`seed_room_players()`):** the `CATEGORY`
+  strategy interleaves players by rating tier (top+medium `rating >= 6` drawn
+  ~75%, low `< 6` drawn ~25%), each pool shuffled independently so the order is
+  exciting and never repeats. `RANDOM` remains as a pure shuffle.
+* **Hover-to-peek next player (`src/components/auction/BalancePanel.tsx`):**
+  hovering the Balance panel flips it (3D `rotateY`) to preview the next
+  player's photo + name; disabled on the final player. Backed by a new
+  `snapshot.nextPlayer` field.
+* **Reusable player image with fallback (`src/components/auction/PlayerImage.tsx`):**
+  renders the real headshot and falls back to an initials avatar on error —
+  used by the player card, My Squad, and the next-player peek.
+* **Exit to Home button (`src/components/results/ResultsView.tsx`):** post-auction
+  results screen now links back to the landing page.
+* **Reproducible seed generator (`data-extraction/generate_seed.mjs`):**
+  regenerates `supabase/seed.sql` from `ipl_2026_auction_dataset.json`
+  (idempotent; derives numeric `base_price_lakhs` from the display string).
+* **Migration guide (`supabase/MIGRATIONS.md`):** documents the apply order and
+  what each migration does.
+
+### Changed
+* **Realtime balance sync (`src/hooks/useRoom.ts`,
+  `supabase/migrations/006_realtime_fix.sql`):** every realtime signal now
+  reconciles the full snapshot, and realtime tables are set to
+  `REPLICA IDENTITY FULL` so participant budget UPDATEs reach **all** clients,
+  not just the admin. (See Fixed.)
+* **Player profile card (`src/components/auction/PlayerCard.tsx`):** rebuilt to
+  show `{playerName} – {teamName}`, an info row (`role · nationality ·
+  Experience N years`), a `Rating x/10 · BasePrice` row, and a large
+  edge-to-edge headshot that bleeds to the card edges with a matching
+  background (no seam).
+* **Bid history (`src/components/auction/BidHistory.tsx`):** compact,
+  center-anchored, name + amount only — the latest/highest bid stays pinned in
+  the center while older bids fan out and fade. Removed the bulky chip layout
+  and its animations to stop the timer/bid glitching.
+* **Countdown timer (`src/components/auction/CountdownTimer.tsx`,
+  `src/hooks/useTimer.ts`):** redesigned to a single, professional ring on the
+  brand palette (ink → amber ≤10s → red ≤5s), monospaced `tabular-nums`
+  readout, no glow/pulse/emoji. The ring now uses the room's **actual**
+  `bid_timer_seconds` for accuracy instead of guessing the duration.
+* **Admin controls (`src/components/auction/AdminToolbar.tsx`):** moved from a
+  floating bottom-right panel into the top-right header as an inline,
+  admin-only control cluster (visible only during `AUCTION` / `PAUSED`).
+* **Create flow back-link** now returns to the rooms hub (`/rooms`).
+
+### Fixed
+* **Other participants' balances not updating live:** caused by realtime tables
+  using the default `REPLICA IDENTITY` (PK-only), so RLS-gated UPDATE events on
+  `room_participants` weren't delivered to every subscriber. Fixed via
+  `REPLICA IDENTITY FULL` + full-snapshot reconciliation on the room update
+  signal.
+
+### Security
+* **Private rooms + link-tamper guard (`src/app/room/[id]/page.tsx`):** private
+  rooms are excluded from discovery and, for a non-participant who opens the URL
+  directly, the join CTA / room code is **not** shown — only public, joinable
+  (LOBBY) rooms expose a Join action. Joining still requires the host's invite
+  link for private rooms.
+
+---
+
 ## [1.1.0] - 2026-06-26
 
 This release implements major UI/UX improvements, viewport optimizations, layout fixes, and bids handling refactoring.

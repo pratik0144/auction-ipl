@@ -11,10 +11,10 @@
 | Layer | Technology |
 |-------|-----------|
 | Database | PostgreSQL (via Supabase) |
-| Auth | Supabase Auth (anonymous or email) |
-| Realtime | Supabase Realtime (postgres_changes) |
-| API | Supabase RPC (Postgres functions) + Next.js API routes |
-| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4 |
+| Identity | No login — per-browser `localStorage` UUID; data access via the Supabase **anon** key |
+| Realtime | Supabase Realtime (postgres_changes, `REPLICA IDENTITY FULL`) |
+| API | Supabase RPC (Postgres `SECURITY DEFINER` functions) + Next.js API routes |
+| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4 (Vercel-inspired dark system) |
 | Hosting | Vercel (frontend) + Supabase Cloud (backend) |
 
 ---
@@ -29,6 +29,8 @@
 │          │     │ status (enum)      │     │ order_index    │
 │          │     │ purse_budget_lakhs │     │ status (enum)  │
 │          │     │ bid_timer_seconds  │     │ ends_at        │
+│          │     │ is_public (bool)   │     │                │
+│          │     │ player_order (text)│     │                │
 └──────────┘     └────────┬───────────┘     └───────┬────────┘
                           │                         │
                           │                         │
@@ -61,6 +63,15 @@ The system uses **Supabase Realtime postgres_changes** as the primary mechanism 
 | `room_participants` | * | Player joins, budget changes |
 | `room_players` | * | Player activated, sold, unsold |
 | `bids` | INSERT | New bids placed |
+
+> **`REPLICA IDENTITY FULL` (important):** all realtime tables are set to
+> `REPLICA IDENTITY FULL` (see `006_realtime_fix.sql`). With RLS enabled,
+> Supabase Realtime needs the full row image to authorize and emit `UPDATE`
+> events — without it, the `room_participants` budget deduction was delivered
+> to some clients (e.g. the admin) but not all. The client (`useRoom`) also
+> reconciles the **full snapshot** on every realtime signal, so because every
+> auction resolution updates the `rooms` row, all participants' budgets always
+> re-sync after each sale even if a single table event is missed.
 
 ### Why Not Broadcast?
 
@@ -143,25 +154,57 @@ SELECT * INTO v_participant FROM room_participants WHERE id = p_participant_id F
 
 ## Row-Level Security (RLS) Model
 
+This app has **no user login**. The browser uses the Supabase **anon** key with
+a per-browser `localStorage` UUID as the identity. RLS is therefore **permissive
+for reads** and all writes are funnelled through `SECURITY DEFINER` RPCs.
+
 | Table | SELECT | INSERT/UPDATE/DELETE |
 |-------|--------|---------------------|
-| `players` | Everyone (public catalog) | None (seed data only) |
-| `rooms` | Authenticated users | Via SECURITY DEFINER RPCs only |
-| `room_participants` | Room members only | Via SECURITY DEFINER RPCs only |
-| `room_players` | Room members only | Via SECURITY DEFINER RPCs only |
-| `bids` | Room members only | Via SECURITY DEFINER RPCs only |
+| `players` | `anon` (public catalog) | None (seed data only) |
+| `rooms` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
+| `room_participants` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
+| `room_players` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
+| `bids` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
+| `room_chats` | `anon` (`USING (true)`) | Via `send_chat` RPC |
 
-### Room Member Check
+> The legacy `002_rls_policies.sql` (authenticated / `auth.uid()` based) predates
+> the decision to skip login and is **superseded** by the permissive `anon`
+> policies in `combined_migration.sql`. See `supabase/MIGRATIONS.md`.
 
-```sql
-EXISTS (
-  SELECT 1 FROM room_participants rp
-  WHERE rp.room_id = <table>.room_id
-  AND rp.user_id = auth.uid()
-)
-```
+### Access control without login
 
-All write operations go through `SECURITY DEFINER` functions that bypass RLS but enforce business rules (admin validation, budget checks, timer validation, etc.).
+Because there is no auth, room privacy is enforced at the application + data
+level rather than via row ownership:
+
+- **Public vs private** (`rooms.is_public`): `listPublicRooms()` only returns
+  public, open (`LOBBY`) rooms, so private rooms are not discoverable.
+- **Link-tamper guard:** a non-participant who opens `/room/{id}` directly is
+  only offered a Join action (and shown the room code) for **public, joinable**
+  rooms. Private rooms show "you need an invite link" and never expose the join
+  CTA — so you can't join a private room by guessing/altering the URL.
+- The 6-character room code remains the shared secret for joining via the
+  host's `/join/{code}` invite link.
+
+All write operations still go through `SECURITY DEFINER` functions that enforce
+business rules (admin validation, budget checks, timer validation, etc.).
+
+---
+
+## Player Ordering Algorithm
+
+When the auction starts, `seed_room_players(room_id, strategy)` populates
+`room_players` with an `order_index` using the room's `player_order`:
+
+- **`RANDOM`** — a pure `ORDER BY random()` shuffle of all players.
+- **`CATEGORY`** ("high-dopamine") — players are split into tiers by rating
+  (`top+medium` = `rating >= 6`, `low` = `rating < 6`), each tier shuffled
+  independently, then **weighted-interleaved**: each slot is drawn ~**75%** from
+  the top+medium pool and ~**25%** from the low pool until one runs out, then the
+  other drains. This keeps star/key players sprinkled throughout the auction
+  (never clustered) and, because both pools are reshuffled per game, the order
+  **never repeats**.
+
+`start_auction()` and `start_auction_dev()` both call this builder.
 
 ---
 
@@ -171,15 +214,25 @@ All write operations go through `SECURITY DEFINER` functions that bypass RLS but
 
 | Function | Caller | Purpose |
 |----------|--------|---------|
-| `create_room()` | Any authenticated user | Create room + auto-join as admin |
-| `join_room()` | Any authenticated user | Join an existing LOBBY room |
-| `start_auction()` | Room admin only | Initialize player order, start first player |
+| `create_room()` | Any user | Create room (incl. `is_public`, `player_order`) + auto-join as admin |
+| `join_room()` | Any user | Join an existing LOBBY room |
+| `start_auction()` | Room admin only | Build player order (via `seed_room_players`), start first player |
+| `start_auction_dev()` | Room admin only | Same as above but skips the 2-participant minimum (dev) |
+| `seed_room_players()` | Internal | Populate `room_players` order (`RANDOM` / `CATEGORY`) |
 | `place_bid()` | Room participants | Place a bid on the active player |
 | `check_and_resolve()` | Any room member | Client-triggered timer resolution |
+| `resolve_expired_auctions()` | pg_cron | Safety-net sweep for orphaned auctions |
 | `pause_auction()` | Room admin only | Pause with remaining time saved |
 | `resume_auction()` | Room admin only | Resume with saved time restored |
 | `force_resolve_current_player()` | Room admin only | Skip current player (admin override) |
 | `end_auction_early()` | Room admin only | End auction, mark remaining as UNSOLD |
+| `send_chat()` | Room participants | Post a chat message |
+
+### Client read helpers (`src/lib/api.ts`)
+
+Direct `anon` SELECTs (not RPCs): `getRoomSnapshot()`, `getRoomResults()`,
+`getRoomChats()`, and discovery — `listPublicRooms()` (public LOBBY rooms with
+participant counts) and `listMyRooms(userId)` (rooms the user has joined).
 
 ### Next.js API Routes (SSR Wrappers)
 
@@ -192,8 +245,9 @@ All write operations go through `SECURITY DEFINER` functions that bypass RLS but
 
 ## Budget & Squad Constraints
 
-- **Purse budget**: Configurable (default ₹120 Cr / 12000 lakhs)
-- **Max squad size**: Configurable (default 18 players)
+- **Purse budget**: Chosen at creation from fixed options — ₹100 / 150 / 200 / 250 Cr (10000–25000 lakhs)
+- **Max squad size**: Chosen from fixed options — 10 / 15 / 20 / 25
+- **Bid timer**: Chosen from fixed options — 10 / 15 / 20 / 25 / 30s
 - **Budget validation**: Checked against `remaining_budget_lakhs` at bid time
 - **Budget deduction**: Happens atomically when a player is resolved as SOLD
 - **Squad size check**: Count of SOLD players for that participant < max_squad_size
