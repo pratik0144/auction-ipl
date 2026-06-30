@@ -154,39 +154,47 @@ SELECT * INTO v_participant FROM room_participants WHERE id = p_participant_id F
 
 ## Row-Level Security (RLS) Model
 
-This app has **no user login**. The browser uses the Supabase **anon** key with
-a per-browser `localStorage` UUID as the identity. RLS is therefore **permissive
-for reads** and all writes are funnelled through `SECURITY DEFINER` RPCs.
+This app uses **Supabase Email/Password Authentication** to secure room membership and gaming transactions. Every write transaction is initiated via `SECURITY DEFINER` RPC functions that execute operations on behalf of the active user session. Reads are restricted to room participants using RLS policies.
 
 | Table | SELECT | INSERT/UPDATE/DELETE |
 |-------|--------|---------------------|
-| `players` | `anon` (public catalog) | None (seed data only) |
-| `rooms` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
-| `room_participants` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
-| `room_players` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
-| `bids` | `anon` (`USING (true)`) | Via SECURITY DEFINER RPCs only |
-| `room_chats` | `anon` (`USING (true)`) | Via `send_chat` RPC |
+| `players` | `authenticated` / `anon` (`USING (true)`) | None (seed data only) |
+| `rooms` | `authenticated` / `anon` (if public and status = 'LOBBY') | Via SECURITY DEFINER RPCs only |
+| `room_participants` | `authenticated` (`is_room_member(room_id)`) | Via SECURITY DEFINER RPCs only |
+| `room_players` | `authenticated` (`is_room_member(room_id)`) | Via SECURITY DEFINER RPCs only |
+| `bids` | `authenticated` (`is_room_member(room_id)`) | Via SECURITY DEFINER RPCs only |
+| `room_chats` | `authenticated` (`is_room_member(room_id)`) | Via `send_chat` RPC |
+| `profiles` | `authenticated` (`id = auth.uid()`) | Via signup trigger / own update only |
 
-> The legacy `002_rls_policies.sql` (authenticated / `auth.uid()` based) predates
-> the decision to skip login and is **superseded** by the permissive `anon`
-> policies in `combined_migration.sql`. See `supabase/MIGRATIONS.md`.
+### Recursive Policy Bypass Helper
 
-### Access control without login
+To avoid infinite recursion when querying `room_participants` from within policies, the RLS rules utilize a helper function defined with `SECURITY DEFINER`:
 
-Because there is no auth, room privacy is enforced at the application + data
-level rather than via row ownership:
+```sql
+CREATE OR REPLACE FUNCTION is_room_member(p_room_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM room_participants
+    WHERE room_id = p_room_id
+    AND user_id = auth.uid()
+  );
+$$;
+```
 
-- **Public vs private** (`rooms.is_public`): `listPublicRooms()` only returns
-  public, open (`LOBBY`) rooms, so private rooms are not discoverable.
-- **Link-tamper guard:** a non-participant who opens `/room/{id}` directly is
-  only offered a Join action (and shown the room code) for **public, joinable**
-  rooms. Private rooms show "you need an invite link" and never expose the join
-  CTA — so you can't join a private room by guessing/altering the URL.
-- The 6-character room code remains the shared secret for joining via the
-  host's `/join/{code}` invite link.
+### Access control and privacy
 
-All write operations still go through `SECURITY DEFINER` functions that enforce
-business rules (admin validation, budget checks, timer validation, etc.).
+* **Public vs private** (`rooms.is_public`): `listPublicRooms()` only returns public, open (`LOBBY`) rooms, so private rooms are not discoverable.
+* **Link-tamper guard:** A non-participant who opens `/room/{id}` directly is only offered a Join action (and shown the room code) for **public, joinable** rooms. Private rooms show "you need an invite link" and never expose the join CTA — so you can't join a private room by guessing/altering the URL.
+* **Auth Guards:** Route/action guards direct unauthenticated users to `/auth` when attempting to access `/create`, `/join`, `/join/[code]`, `/rooms`, and `/room/[id]`.
+* **Profiles Sync:** When a user registers, an database trigger `on_auth_user_created` calls a `SECURITY DEFINER` function `handle_new_user()` to automatically insert a corresponding row in the public `profiles` table.
+
+All write operations still go through `SECURITY DEFINER` functions that enforce business rules (admin validation, budget checks, timer validation, etc.).
+
 
 ---
 

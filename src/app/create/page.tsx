@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createRoom } from '@/lib/api';
 import { useLocalUser } from '@/hooks/useLocalUser';
+import { useAuth } from '@/components/AuthProvider';
 import type { PlayerOrder } from '@/lib/types';
 
 const IS_DEV = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
@@ -56,6 +57,7 @@ function Segmented<T>({
 
 export default function CreateRoomPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { userId, setParticipant } = useLocalUser();
 
   const [roomName, setRoomName] = useState(IS_DEV ? 'Dev Test Room' : '');
@@ -99,6 +101,13 @@ export default function CreateRoomPage() {
       router.push(`/room/${result.data.id}`);
     }
   }
+
+  // Auth guard
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/auth');
+    }
+  }, [authLoading, user, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10">

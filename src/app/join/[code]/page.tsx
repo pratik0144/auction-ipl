@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { joinRoom } from '@/lib/api';
 import { useLocalUser } from '@/hooks/useLocalUser';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function JoinRoomWithCodePage({
   params,
@@ -13,7 +14,15 @@ export default function JoinRoomWithCodePage({
 }) {
   const { code } = use(params);
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { userId, setParticipant } = useLocalUser();
+
+  // Auth guard
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/auth');
+    }
+  }, [authLoading, user, router]);
 
   const [displayName, setDisplayName] = useState('');
   const [squadName, setSquadName] = useState('');

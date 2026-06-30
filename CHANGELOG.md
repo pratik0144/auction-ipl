@@ -4,6 +4,29 @@ All notable changes to the **11Auction** project are documented in this file.
 
 ---
 
+## [1.3.0] - 2026-06-30
+
+This release integrates full Supabase Email/Password Authentication, replacing the legacy anonymous localStorage UUID model. It implements client-side auth context, server-side session refreshes via middleware, route/action guards, a profile UI on the landing page, dev quick logins, and recursion-free database RLS rules.
+
+### Added
+* **Supabase Email/Password Authentication:**
+  * Created a secure, toggle-style Sign In / Sign Up page at `/auth` styled with the Vercel-inspired dark theme.
+  * Pre-seeded 4 quick-login test accounts for developer testing on localhost (password: `123789`): `test@test.com`, `test@test1.com`, `test@test2.com`, and `test@test3.com`. Accounts automatically register on first click.
+  * Added global `AuthProvider.tsx` context using `onAuthStateChange` to listen and synchronize sessions across React components.
+  * Implemented `src/middleware.ts` to refresh and synchronize Supabase JWT cookies server-side on Next.js App Router requests.
+* **Database & RLS Upgrades (`008_auth_profiles.sql`, `009_fix_rls.sql`):**
+  * Created `profiles` table that automatically maps `auth.users` via database triggers to sync display names upon registration.
+  * Created `is_room_member(room_id)` helper function using `SECURITY DEFINER` to bypass RLS and prevent infinite recursion on tables referencing `room_participants`.
+  * Configured RLS select rules allowing authenticated users access to active rooms, bids, and chat logs, while leaving public discovery rooms open to anonymous users.
+* **Homepage Profile Pill & Page Guards:**
+  * Added profile bar to the home page `/` showcasing the active user's initials, email address, and a sign-out button (with transition state checks).
+  * Added route redirect guards to `/room/[id]`, `/rooms`, `/create`, `/join`, and `/join/[code]` redirecting unauthenticated users to `/auth`.
+
+### Changed
+* **useLocalUser Hook:** Refactored identity management to pull user IDs from the active authentication session instead of generating local UUIDs. Maintains room details inside localStorage to retain user-to-room affinity.
+
+---
+
 ## [1.2.0] - 2026-06-26
 
 A large release: a full Vercel-inspired dark visual redesign, realtime

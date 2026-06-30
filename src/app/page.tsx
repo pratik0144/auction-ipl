@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function Home() {
+  const { user, loading, signOut } = useAuth();
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Brand mesh gradient — hero-scale atmospheric backdrop */}
@@ -11,9 +14,37 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-void/60 to-void" />
       </div>
 
-      <div className="relative z-10 flex flex-col items-center">
+      <div className="relative z-10 flex flex-col items-center w-full">
+        {/* ---- Profile bar ---- */}
+        <header className="w-full flex items-center justify-end px-6 pt-5 animate-fade-in">
+          {user ? (
+            <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-surface/80 border border-hairline backdrop-blur-sm">
+              <div className="w-7 h-7 rounded-full bg-link/15 flex items-center justify-center text-xs font-display font-semibold text-link shrink-0">
+                {(user.email?.[0] ?? '?').toUpperCase()}
+              </div>
+              <span className="text-sm text-body max-w-[180px] truncate">{user.email}</span>
+              <div className="w-px h-4 bg-hairline" />
+              <button
+                onClick={signOut}
+                className="text-xs text-muted hover:text-chalk transition-colors whitespace-nowrap"
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            !loading && (
+              <Link
+                href="/auth"
+                className="px-4 py-2 rounded-full bg-surface/80 border border-hairline text-sm text-body hover:text-chalk backdrop-blur-sm transition-colors"
+              >
+                Sign In
+              </Link>
+            )
+          )}
+        </header>
+
         {/* ---- Hero ---- */}
-        <section className="flex flex-col items-center text-center px-6 pt-28 pb-16 gap-7 animate-fade-in">
+        <section className="flex flex-col items-center text-center px-6 pt-16 pb-16 gap-7 animate-fade-in">
           <span className="eyebrow">IPL Edition · Live Auction</span>
           <div>
             <h1 className="font-display text-5xl sm:text-6xl font-semibold tracking-[-0.04em] text-chalk leading-[1.05]">
@@ -24,12 +55,20 @@ export default function Home() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 mt-1">
-            <Link href="/create" className="btn-primary px-7 py-3">
-              Create Room
-            </Link>
-            <Link href="/join" className="btn-outline px-7 py-3">
-              Join Room
-            </Link>
+            {user ? (
+              <>
+                <Link href="/create" className="btn-primary px-7 py-3">
+                  Create Room
+                </Link>
+                <Link href="/join" className="btn-outline px-7 py-3">
+                  Join Room
+                </Link>
+              </>
+            ) : (
+              <Link href="/auth" className="btn-primary px-7 py-3">
+                {loading ? 'Loading…' : 'Sign In to Play'}
+              </Link>
+            )}
           </div>
         </section>
 
@@ -98,7 +137,7 @@ export default function Home() {
           </div>
 
           <p className="text-center text-xs text-muted mt-10">
-            3–5 players · ~100 real cricketers · no signup
+            3–5 players · ~100 real cricketers · free to play
           </p>
         </section>
       </div>

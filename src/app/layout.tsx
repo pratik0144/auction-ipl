@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import AuthProvider from "@/components/AuthProvider";
 import "./globals.css";
 
 // Geist substitute — Inter carries display + body (weights 400/500/600).
@@ -34,12 +35,14 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} h-full`}
     >
       <body className="min-h-full bg-void text-chalk font-body antialiased">
-        {process.env.NEXT_PUBLIC_DEV_MODE === 'true' && (
-          <div className="sticky top-0 z-[200] bg-amber text-void text-center text-xs font-mono py-1">
-            DEV MODE — port 3003 — solo testing · no restrictions
-          </div>
-        )}
-        {children}
+        <AuthProvider>
+          {process.env.NEXT_PUBLIC_DEV_MODE === 'true' && (
+            <div className="sticky top-0 z-[200] bg-amber text-void text-center text-xs font-mono py-1">
+              DEV MODE — port 3003 — solo testing · no restrictions
+            </div>
+          )}
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

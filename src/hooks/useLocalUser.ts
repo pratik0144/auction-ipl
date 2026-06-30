@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useAuth } from '@/components/AuthProvider';
 
 interface LocalUser {
   userId: string;
@@ -10,16 +11,15 @@ interface LocalUser {
 
 const STORAGE_KEY = 'auction_user';
 
-function readStorage(): LocalUser {
+function readParticipantData(): { participantId: string | null; roomId: string | null } {
   if (typeof window === 'undefined') {
-    return { userId: '', participantId: null, roomId: null };
+    return { participantId: null, roomId: null };
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
-        userId: parsed.userId || crypto.randomUUID(),
         participantId: parsed.participantId || null,
         roomId: parsed.roomId || null,
       };
@@ -27,34 +27,30 @@ function readStorage(): LocalUser {
   } catch {
     // ignore
   }
-  const newUser: LocalUser = {
-    userId: crypto.randomUUID(),
-    participantId: null,
-    roomId: null,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-  return newUser;
+  return { participantId: null, roomId: null };
 }
 
 export function useLocalUser() {
-  const [user, setUser] = useState<LocalUser>({
-    userId: '',
-    participantId: null,
-    roomId: null,
-  });
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    setUser(readStorage());
-  }, []);
+  const [participantData, setParticipantData] = useState(() => readParticipantData());
+
+  const userId = user?.id ?? '';
 
   const setParticipant = useCallback(
     (participantId: string, roomId: string) => {
-      const updated = { ...user, participantId, roomId };
-      setUser(updated);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      const updated = { participantId, roomId };
+      setParticipantData(updated);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...updated, userId }));
     },
-    [user]
+    [userId]
   );
 
-  return { ...user, setParticipant };
+  return {
+    userId,
+    participantId: participantData.participantId,
+    roomId: participantData.roomId,
+    setParticipant,
+    loading,
+  };
 }

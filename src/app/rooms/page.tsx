@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocalUser } from '@/hooks/useLocalUser';
 import {
@@ -10,6 +11,7 @@ import {
   type MyRoomSummary,
 } from '@/lib/api';
 import type { RoomStatus } from '@/lib/types';
+import { useAuth } from '@/components/AuthProvider';
 
 function StatusPill({ status }: { status: RoomStatus }) {
   const map: Record<RoomStatus, { label: string; cls: string }> = {
@@ -29,6 +31,8 @@ function StatusPill({ status }: { status: RoomStatus }) {
 }
 
 export default function RoomsPage() {
+  const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { userId } = useLocalUser();
   const [publicRooms, setPublicRooms] = useState<PublicRoomSummary[] | null>(null);
   const [myRooms, setMyRooms] = useState<MyRoomSummary[] | null>(null);
@@ -59,10 +63,28 @@ export default function RoomsPage() {
     return () => clearInterval(id);
   }, [loadPublic]);
 
+  // Auth guard
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/auth');
+    }
+  }, [authLoading, user, router]);
+
   async function handleRefresh() {
     setRefreshing(true);
     await Promise.all([loadPublic(), loadMine()]);
     setRefreshing(false);
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+          <div className="w-16 h-16 rounded-full skeleton" />
+          <div className="w-48 h-4 skeleton" />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -83,13 +105,22 @@ export default function RoomsPage() {
             <span className="text-muted text-xs">▾</span>
           </Link>
         </div>
-        <button
-          onClick={handleRefresh}
-          className="text-sm text-body hover:text-chalk transition-colors"
-          title="Refresh"
-        >
-          {refreshing ? 'Refreshing…' : '↻ Refresh'}
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleRefresh}
+            className="text-sm text-body hover:text-chalk transition-colors"
+            title="Refresh"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+          <button
+            onClick={signOut}
+            className="text-sm text-muted hover:text-chalk transition-colors"
+            title="Sign out"
+          >
+            Sign Out
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-6 py-10 animate-fade-in">

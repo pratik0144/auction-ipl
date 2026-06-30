@@ -1,14 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { joinRoom } from '@/lib/api';
 import { useLocalUser } from '@/hooks/useLocalUser';
+import { useAuth } from '@/components/AuthProvider';
 
 export default function JoinRoomPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { userId, setParticipant } = useLocalUser();
+
+  // Auth guard
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/auth');
+    }
+  }, [authLoading, user, router]);
 
   const [roomCode, setRoomCode] = useState('');
   const [displayName, setDisplayName] = useState('');

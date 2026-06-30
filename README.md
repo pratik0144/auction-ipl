@@ -4,10 +4,7 @@
 
 The application leverages a modern **Serverless Realtime** architecture. The frontend is built on **Next.js 16 (App Router)** and styled with **Tailwind CSS v4** in a **Vercel-inspired dark design system**. The backend is powered by **Supabase** (PostgreSQL database, real-time sync listeners, and security definer database functions).
 
-> **Identity model:** there is no login. Each browser generates a persistent
-> `userId` (UUID in `localStorage`); all data access uses the Supabase **anon**
-> key with permissive (`TO anon`) read policies, and every write goes through
-> `SECURITY DEFINER` RPC functions that enforce the business rules.
+> **Identity model:** Supabase Email/Password authentication is integrated. Users register or log in via a toggle-style sign-in/sign-up page (`/auth`). Authenticated sessions are synchronized across the application via React Context (`AuthProvider.tsx`) and cookies are kept fresh on both server/client components via Next.js Middleware. A dev-only quick login dashboard is available for developers on localhost.
 
 ---
 
@@ -36,7 +33,7 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 * **Backend:**
   * **Database:** PostgreSQL (Supabase Cloud Database)
   * **Realtime Broadcasts:** Supabase Realtime Channel API (`postgres_changes`)
-  * **Authorization:** Supabase **anon** key + permissive read RLS; writes via `SECURITY DEFINER` RPC functions (no user login — identity is a `localStorage` UUID)
+  * **Authorization:** Supabase Email/Password Authentication & Row-Level Security (RLS); writes via `SECURITY DEFINER` RPC functions requiring active user sessions (identity backed by `auth.users` + dynamic profile sync)
 * **Dev Environment:**
   * **Language:** TypeScript 5
   * **Package Manager:** NPM
@@ -58,8 +55,10 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   │   ├── 004_cron.sql             # pg_cron periodic sweeper configuration
 │   │   ├── 005_chat.sql             # Live chat tables and sending procedures
 │   │   ├── 006_realtime_fix.sql     # REPLICA IDENTITY FULL + publication fix (balance sync)
-│   │   └── 007_room_options.sql     # is_public, player_order + seed_room_players() ordering
-│   ├── combined_migration.sql       # One-shot setup for a fresh database (anon RLS, all funcs)
+│   │   ├── 007_room_options.sql     # is_public, player_order + seed_room_players() ordering
+│   │   ├── 008_auth_profiles.sql    # NEW: Profiles table, auto-insert triggers on signup
+│   │   └── 009_fix_rls.sql          # NEW: Recursion-free RLS policy configuration using helper functions
+│   ├── combined_migration.sql       # One-shot setup for a fresh database (all tables, functions, catalogs)
 │   ├── seed.sql                     # ~100 IPL players (auto-generated from the JSON)
 │   ├── dev_functions.sql            # start_auction_dev (solo testing bypass)
 │   └── MIGRATIONS.md                # Apply order + what each migration does
@@ -67,15 +66,17 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   ├── app/                         # App Router Pages & API routes
 │   │   ├── api/rooms/route.ts        # POST: server-side room initialization wrapper
 │   │   ├── api/rooms/[id]/route.ts   # GET: room snapshot resolver
-│   │   ├── page.tsx                 # Landing: hero + tournament selector
+│   │   ├── auth/page.tsx            # NEW: Sign In / Sign Up toggle view + Local Dev logins
+│   │   ├── page.tsx                 # Landing: hero + tournament selector + user profile/sign-out header
 │   │   ├── rooms/page.tsx           # Rooms hub: create/join, public rooms, your rooms
 │   │   ├── create/page.tsx          # Create Room (fixed-option selectors + toggles)
 │   │   ├── join/page.tsx            # Join by code
 │   │   ├── join/[code]/page.tsx     # Auto-filled join (invite link target)
-│   │   ├── room/[id]/page.tsx       # Realtime lobby / auction / results wrapper + header
+│   │   ├── room/[id]/page.tsx       # Realtime lobby / auction / results wrapper + header + sign out
 │   │   ├── globals.css              # Vercel-inspired Tailwind v4 design system
-│   │   └── layout.tsx               # App layout, metadata, fonts (Inter / JetBrains Mono)
+│   │   └── layout.tsx               # App layout wrapped with AuthProvider, metadata, fonts
 │   ├── components/
+│   │   ├── AuthProvider.tsx         # NEW: Auth state listener & React Context provider
 │   │   ├── auction/
 │   │   │   ├── AdminToolbar.tsx     # Pause/resume/skip/end (admin-only, in header)
 │   │   │   ├── AuctionView.tsx      # Fixed three-column live auction console layout
@@ -93,7 +94,7 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   ├── hooks/
 │   │   ├── useRoom.ts               # Snapshot fetch + realtime reconciliation
 │   │   ├── useParticipant.ts        # Derives current participant / admin / myPlayers
-│   │   ├── useLocalUser.ts          # Persistent localStorage userId / participant
+│   │   ├── useLocalUser.ts          # Integrates with AuthProvider for userId; maintains room affinity in local storage
 │   │   └── useTimer.ts              # requestAnimationFrame timer (uses real duration)
 │   ├── lib/
 │   │   ├── supabase/{client,server,realtime}.ts
@@ -101,6 +102,7 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   │   ├── bidCalculator.ts         # Bidding increment math and fallbacks
 │   │   ├── types.ts                 # TS typings representing the database schemas
 │   │   └── utils.ts                 # Currency and text formatting utilities
+│   ├── middleware.ts                # NEW: Next.js middleware to refresh Supabase cookies
 ├── package.json
 ├── tsconfig.json
 ├── ARCHITECTURE.md                  # Detailed architectural overview
@@ -119,23 +121,32 @@ npm install
 
 ### 2. Connect Supabase Database
 1. Create a project on the [Supabase Dashboard](https://supabase.com/).
-2. **Fresh setup (recommended):** open the Supabase SQL Editor and run
-   **`supabase/combined_migration.sql`** once — it creates all tables, the
-   permissive **anon** RLS policies, every RPC function (including the room
-   options + ordering algorithm), seeds the players, and enables realtime.
-   Then run **`supabase/dev_functions.sql`** if you want the solo-testing
-   bypass. See **`supabase/MIGRATIONS.md`** for the full apply order and details.
-   * **Existing database?** Apply the incremental migrations you're missing —
-     in particular `006_realtime_fix.sql` (live balance sync) and
-     `007_room_options.sql` (public/private + player order). See `MIGRATIONS.md`.
-3. The players catalog is seeded by the combined migration. To re-seed
+2. **Fresh setup (recommended):** open the Supabase SQL Editor and execute:
+   * **`supabase/combined_migration.sql`** (base schema, catalogs, seed, core RPCs)
+   * **`supabase/migrations/005_chat.sql`** (live chat schema & RPCs)
+   * **`supabase/migrations/008_auth_profiles.sql`** (user profile schema & trigger)
+   * **`supabase/migrations/009_fix_rls.sql`** (recursion-free auth RLS configuration)
+   * **`supabase/dev_functions.sql`** (solo-testing bypass)
+   * See **`supabase/MIGRATIONS.md`** for incremental details.
+3. **Configure Authentication settings in Supabase Dashboard:**
+   * Go to **Authentication** -> **Settings**.
+   * Under **User Sign Up**, turn **OFF** "Confirm Email" / "Enable email confirmations". This allows new users to register and log in instantly without waiting for an email verification token.
+4. **Developer Quick Login (Localhost only):**
+   * When `NEXT_PUBLIC_DEV_MODE=true` is enabled, the `/auth` page presents a quick-login grid populated with testing credentials.
+   * Testing accounts (password: `123789`):
+     * `test@test.com`
+     * `test@test1.com`
+     * `test@test2.com`
+     * `test@test3.com`
+     * These accounts will automatically sign up on first click if they do not exist.
+5. The players catalog is seeded by the combined migration. To re-seed
    independently, run `supabase/seed.sql` (regenerate it from the JSON with
    `node data-extraction/generate_seed.mjs`).
-4. Copy the environment template:
+6. Copy the environment template:
    ```bash
    cp .env.example .env.local
    ```
-5. Open `.env.local` and add your database variables:
+7. Open `.env.local` and add your database variables:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key

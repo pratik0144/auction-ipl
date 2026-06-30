@@ -1,9 +1,11 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRoom } from '@/hooks/useRoom';
 import { useLocalUser } from '@/hooks/useLocalUser';
 import { useParticipant } from '@/hooks/useParticipant';
+import { useAuth } from '@/components/AuthProvider';
 import LobbyView from '@/components/lobby/LobbyView';
 import AuctionView from '@/components/auction/AuctionView';
 import ResultsView from '@/components/results/ResultsView';
@@ -16,12 +18,21 @@ export default function RoomPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { userId } = useLocalUser();
   const { snapshot, loading, error } = useRoom(id);
   const { participant, isAdmin, myPlayers } = useParticipant(snapshot, userId);
 
+  // Auth guard — redirect to /auth if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/auth');
+    }
+  }, [authLoading, user, router]);
+
   // Loading skeleton
-  if (loading || !userId) {
+  if (loading || authLoading || !userId) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
@@ -110,6 +121,13 @@ export default function RoomPage({
               roomStatus={snapshot.room.status}
             />
           )}
+        <button
+          onClick={signOut}
+          className="text-xs text-muted hover:text-chalk transition-colors ml-1"
+          title="Sign out"
+        >
+          Sign Out
+        </button>
       </div>
     </div>
   );

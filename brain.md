@@ -544,15 +544,19 @@ Bids are mapped outwards from the center to ensure the latest bid is always high
 ## 🔒 7. Row-Level Security (RLS) & Write Policies
 
 * **Catalog Read Actions:** The `players` catalog table allows select actions for all authenticated users.
-* **Room Table Subscriptions:** Read operations for `rooms`, `room_players`, `bids`, and `room_chats` are protected via Row-Level Security policies. Select actions are restricted using checking subqueries:
+* **Room Table Subscriptions:** Read operations for `rooms`, `room_players`, `bids`, and `room_chats` are protected via Row-Level Security policies. Select actions are restricted using checking helper functions to prevent RLS recursion:
   ```sql
-  EXISTS (
-    SELECT 1 FROM room_participants rp
-    WHERE rp.room_id = room_players.room_id
-    AND rp.user_id = auth.uid()
-  )
+  is_room_member(room_id)
   ```
-* **Write Restraints:** Direct write actions (INSERT, UPDATE, DELETE) are blocked on all active tables. Modifications are routed through database functions using `SECURITY DEFINER` constraints, which bypass RLS checks to perform updates.
+  Where `is_room_member` is a `SECURITY DEFINER` function executing a stable query:
+  ```sql
+  SELECT EXISTS (
+    SELECT 1 FROM room_participants
+    WHERE room_id = p_room_id
+    AND user_id = auth.uid()
+  );
+  ```
+* **Write Restraints:** Direct write actions (INSERT, UPDATE, DELETE) are blocked on all active gaming tables. Modifications are routed through database functions using `SECURITY DEFINER` constraints, which bypass RLS checks to perform updates and validate participants using `auth.uid()`.
 
 ---
 
@@ -564,66 +568,75 @@ Bids are mapped outwards from the center to ensure the latest bid is always high
 
 ---
 
-## 🆕 9. Session Update — v1.2.0 (authoritative deltas)
+## 🆕 9. Session Update — v1.3.0 (Supabase Email/Password Auth & RLS Integration)
 
-> The sections above describe the original scaffold. Where they conflict with
-> this section, **this section wins**. See `CHANGELOG.md` for the full list and
-> `supabase/MIGRATIONS.md` for DB apply order.
+> The sections above describe the original scaffold and incremental updates. Where they conflict with this section, **this section wins**. See `CHANGELOG.md` for the full list and `supabase/MIGRATIONS.md` for DB apply order.
 
-### 9.1 Identity & RLS (correction)
+### 9.1 Identity, Profiles, and Authentication
 
-There is **no Supabase Auth / login**. The browser holds a `localStorage` UUID
-(`useLocalUser`) and all access uses the **anon** key. RLS is **permissive for
-reads** (`TO anon USING (true)` on `rooms`, `room_participants`, `room_players`,
-`bids`, `players`, `room_chats`); writes go through `SECURITY DEFINER` RPCs.
-The `auth.uid()`-based policies in `002_rls_policies.sql` are **legacy/superseded**.
+The identity model has been upgraded to a secure **Supabase Email/Password Authentication** system:
+* **Registration & Login:** Handled via a toggle-style auth view at `/auth`. Users sign up or sign in using their email and password.
+* **React Context Integration (`AuthProvider.tsx`):** A client-side context wraps the application to track the active session, exposing `user`, `session`, `loading`, and `signOut` properties. It leverages `supabase.auth.onAuthStateChange` to reactively update components on login, logout, or session expiry.
+* **Database Syncing (`profiles`):** A new table `profiles` maps user IDs to their metadata:
+  ```sql
+  CREATE TABLE profiles (
+    id           uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    display_name text NOT NULL DEFAULT '',
+    created_at   timestamptz NOT NULL DEFAULT now()
+  );
+  ```
+  An database trigger `on_auth_user_created` calls `handle_new_user()` to automatically sync display names on signup.
+* **Refactored useLocalUser Hook:** Transitioned from anonymous `localStorage` UUID generation to retrieving `userId` from `AuthProvider`. Room affinity state (`participantId`, `roomId`) is still persisted in `localStorage` (`auction_user`) to keep users aligned with their rosters.
 
-### 9.2 Realtime balance-sync fix
+### 9.2 Server-Side Token Refresh (Next.js Middleware)
 
-- Root cause of "balances only update on the admin's screen": realtime tables
-  used the default `REPLICA IDENTITY` (PK only), so RLS-gated `UPDATE` events on
-  `room_participants` weren't delivered to all subscribers.
-- Fix: `REPLICA IDENTITY FULL` on all realtime tables (`006_realtime_fix.sql`)
-  **and** `useRoom` now reconciles the **full snapshot** on every realtime
-  signal (including the `rooms` row, which changes on every resolution).
+To maintain session persistence for both Server Components and Client Components, `src/middleware.ts` intercept requests:
+1. Re-creates the Supabase client using Request/Response headers.
+2. Calls `supabase.auth.getUser()` to trigger session and JWT refreshes.
+3. Automatically synchronized session cookies back to the client's browser.
 
-### 9.3 Room options + access control
+### 9.3 RLS Policy Upgrades (Recursion Fix)
 
-- New columns: `rooms.is_public` (bool) and `rooms.player_order`
-  (`'RANDOM' | 'CATEGORY'`). `create_room` accepts `p_is_public`, `p_player_order`.
-- Create page uses **fixed segmented options**: Purse ₹100/150/200/250 Cr,
-  Squad 10/15/20/25, Timer 10/15/20/25/30s, Player order Random/By Category,
-  Public/Private toggle.
-- **Privacy:** `listPublicRooms()` returns only public LOBBY rooms; the room
-  page hides the join CTA / code for private rooms from non-participants
-  (link-tamper guard). Joining a private room requires the host's `/join/{code}`.
+To prevent infinite recursion errors when evaluating policies on tables like `room_participants`, a `SECURITY DEFINER` helper function `is_room_member` was introduced:
+```sql
+CREATE OR REPLACE FUNCTION is_room_member(p_room_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM room_participants
+    WHERE room_id = p_room_id
+    AND user_id = auth.uid()
+  );
+$$;
+```
+RLS policies for `room_participants`, `room_players`, `bids`, and `room_chats` utilize `is_room_member(room_id)` to validate access without checking recursively. `rooms` table allows authenticated read access (`USING (true)` for `TO authenticated`) and public discovery reads (`USING (is_public = true AND status = 'LOBBY')` for `TO anon`).
 
-### 9.4 Player ordering algorithm — `seed_room_players(room, strategy)`
+### 9.4 Developer Quick Login (Localhost only)
 
-- `RANDOM` = pure shuffle. `CATEGORY` = weighted interleave by rating tier
-  (top+medium `>= 6` drawn ~75%, low `< 6` ~25%, pools shuffled per game) so
-  stars are sprinkled throughout and the order never repeats. Called by
-  `start_auction` and `start_auction_dev`.
+When running the application with `NEXT_PUBLIC_DEV_MODE=true` on localhost, a quick-login dashboard is displayed at `/auth`. Developers can click any of the buttons to instantly log in or register under pre-seeded test accounts:
+* **Predefined Accounts:**
+  * `test@test.com` (password: `123789`)
+  * `test@test1.com` (password: `123789`)
+  * `test@test2.com` (password: `123789`)
+  * `test@test3.com` (password: `123789`)
+* **Auto-creation:** If these accounts do not exist in the local database, the login handler automatically issues a `signUp` followed by a session redirect.
 
-### 9.5 New routes / components / hooks
+### 9.5 Homepage Profile Bar & Header Controls
 
-- **Pages:** `/` (hero + tournament selector), `/rooms` (hub: create/join +
-  Public Rooms + Your Rooms).
-- **API:** `listPublicRooms()`, `listMyRooms(userId)`; snapshot now includes
-  `nextPlayer`.
-- **Components:** `PlayerImage` (headshot + initials fallback, shared);
-  `BalancePanel` hover-to-peek next player (3D flip); `AdminToolbar` relocated
-  into the top-right header (admin-only, AUCTION/PAUSED); `PlayerCard` rebuilt
-  (`name – team`, large bleeding headshot); `BidHistory` center-anchored
-  name+amount; `CountdownTimer` single professional ring; `ResultsView` Exit
-  button.
-- **Hooks:** `useTimer` now takes the real `totalSeconds` for an accurate ring.
+* **Profile Pill:** A glassmorphic top-right profile header is integrated on `/`. It displays the logged-in user's email, a stylized initials avatar, and a `Sign Out` button. When logged out, it provides a clean link to `/auth`.
+* **Action Guards:** Route guards redirect unauthenticated users to `/auth` when attempting to access `/create`, `/join`, `/join/[code]`, `/rooms`, and `/room/[id]`.
+* **Dynamic CTAs:** The homepage main hero dynamically updates to show "Sign In to Play" when logged out, or "Create Room" / "Join Room" when logged in.
 
-### 9.6 Design system
+### 9.6 Architecture, Routing, and Components Recap
 
-- Theme re-tokenised to a **Vercel-inspired dark** system in `globals.css`:
-  surface ladder (`void`/`surface`/`surface-raised`), `hairline(-strong)`
-  borders, text ladder (`chalk`/`body`/`mute`), `link`-blue interactive accent,
-  a single warm `amber` energy accent (live bid / SOLD), `mesh-gradient` +
-  `eyebrow` utilities, and `Inter` / `JetBrains Mono` fonts. The light/dark
-  toggle was removed (dark-only).
+* **Routing updates:**
+  * `/` (hero + tournament selector + profile pill)
+  * `/auth` (Sign in / Sign up view, with localhost Dev login buttons)
+  * `/rooms` (Rooms hub, with list of Public/My rooms + Sign Out)
+  * `/create`, `/join`, `/join/[code]` (All now authenticate users and verify rooms)
+* **Realtime Broadcast PubSub:** Uses Supabase client channel listeners to receive PostgreSQL WAL changes (`postgres_changes`) for active bidding tables in real-time.
+* **Vercel-Inspired Dark Theme:** All authentication, profile, and room creation cards are styled in the dark polarity-flip system (using `void`, `surface`, `surface-raised` background levels, `hairline` and `hairline-strong` border styles, and `chalk`, `body`, and `mute` fonts).
