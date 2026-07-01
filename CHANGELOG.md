@@ -4,6 +4,34 @@ All notable changes to the **11Auction** project are documented in this file.
 
 ---
 
+## [1.4.0] - 2026-07-01
+
+This release implements project file system restructuring (monorepo workspaces for Frontend, Backend, and Database), early-completion automation when all participant squads are full, and an interactive Results Leaderboard featuring a multi-dimensional squad scoring and ranking algorithm.
+
+### Added
+* **Codebase Restructuring (`Frontend/`, `Backend/`, `Database/`):**
+  * Reorganized the project directory structure to separate Next.js client files (`Frontend/`), backend API routes and middleware handlers (`Backend/`), and database migrations/seeds (`Database/`).
+  * Created a root symbolic link (`supabase -> Database/supabase`) to support local Supabase CLI usage.
+  * Configured absolute parent directory lookup `turbopack.root` in `next.config.ts` and path aliases in `tsconfig.json` (`@backend/*` pointing to `../Backend/*`) for workspace cross-compilation.
+* **Auto-Complete Early Resolution (`010_auto_complete_and_rankings.sql`):**
+  * Enhanced `advance_to_next_player(p_room_id)` to automatically check squad counts. If all participants have full squads (`count(SOLD) >= max_squad_size`), it marks remaining players as `UNSOLD` and sets the room status to `COMPLETED` immediately.
+* **Squad Rankings & Winner Algorithm:**
+  * Implemented `compute_auction_rankings(p_room_id)` to calculate scores (out of 100) using three weighted metrics:
+    * **Team Balance (40%)**: Scoring based on fulfilling essential roster needs (1 Wicketkeeper, 2 Batters, 2 Bowlers, 1 All-rounder).
+    * **Value Deals (35%)**: Evaluates rating-to-premium ratio (`rating / (sold_price / base_price)`), rewarding managers who secure key players close to their base price.
+    * **Star Power (25%)**: Aggregates average player rating with extra points for experienced veterans (10+ years in IPL) and international standouts.
+* **leaderboard UI (`ResultsView.tsx`):**
+  * Added expandable ranking cards with progress visualizers for each team's score breakdown.
+  * Grouped squad players by field role with headshot thumbnails, experience details, and sold-vs-base price ratios.
+* **Root Gitignore & Cleanups:**
+  * Created a root `.gitignore` to prevent tracking of local caches (`node_modules/`, `.next/`, `tsconfig.tsbuildinfo`, `.env.local`). Cleaned stale root build artifacts causing Turbopack duplicate module conflicts.
+
+### Changed
+* **Session Refresher Proxying (`Frontend/src/middleware.ts`):**
+  * Wrapped the Next.js auth session refresher. The frontend middleware now forwards request streams to `Backend/middleware.ts` while declaring the static `config.matcher` inline to comply with Next.js compilation rules.
+
+---
+
 ## [1.3.0] - 2026-06-30
 
 This release integrates full Supabase Email/Password Authentication, replacing the legacy anonymous localStorage UUID model. It implements client-side auth context, server-side session refreshes via middleware, route/action guards, a profile UI on the landing page, dev quick logins, and recursion-free database RLS rules.
