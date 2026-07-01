@@ -1,5 +1,7 @@
 # 🏏 11Auction - High-Fidelity Realtime IPL Fantasy Cricket Auction
 
+![alt text](demo-working-imgs/Auction-room.png)
+
 **11Auction** is an IPL-themed live multiplayer cricket auction application. Built for groups of 3–5 users, it simulates a real-world sports auction experience where participants bid on a randomized pool of ~90 real IPL players under strict purse budget and squad size constraints.
 
 The application leverages a modern **Serverless Realtime** architecture. The frontend is built on **Next.js 16 (App Router)** and styled with **Tailwind CSS v4** in a **Vercel-inspired dark design system**. The backend is powered by **Supabase** (PostgreSQL database, real-time sync listeners, and security definer database functions).
