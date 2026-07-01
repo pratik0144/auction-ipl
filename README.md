@@ -4,7 +4,7 @@
 
 The application leverages a modern **Serverless Realtime** architecture. The frontend is built on **Next.js 16 (App Router)** and styled with **Tailwind CSS v4** in a **Vercel-inspired dark design system**. The backend is powered by **Supabase** (PostgreSQL database, real-time sync listeners, and security definer database functions).
 
-> **Identity model:** Supabase Email/Password authentication is integrated. Users register or log in via a toggle-style sign-in/sign-up page (`/auth`). Authenticated sessions are synchronized across the application via React Context (`AuthProvider.tsx`) and cookies are kept fresh on both server/client components via Next.js Middleware. A dev-only quick login dashboard is available for developers on localhost.
+> **Identity model:** Supabase Email/Password authentication is integrated. Users register or log in via a toggle-style sign-in/sign-up page (`/auth`). Authenticated sessions are synchronized across the application via React Context (`AuthProvider.tsx`) and cookies are kept fresh on both server/client components via the Next.js Proxy (request interceptor). A dev-only quick login dashboard is available for developers on localhost.
 
 ---
 
@@ -67,7 +67,7 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   ├── Backend/                     # Shared server-side logic (inside Frontend for Vercel builds)
 │   │   ├── api/rooms/route.ts       # POST: server-side room initialization logic
 │   │   ├── api/rooms/[id]/route.ts  # GET: room snapshot resolver logic
-│   │   └── middleware.ts            # Server-side authentication and cookie refresh logic
+│   │   └── proxy.ts                # Server-side authentication and cookie refresh logic
 │   ├── public/                      # Static assets and images
 │   ├── src/
 │   │   ├── app/                     # App Router Pages & API routes
@@ -87,8 +87,8 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   │   │   └── lobby/LobbyView.tsx  # Pre-auction lobby waiting room
 │   │   ├── hooks/                   # Custom client-side hooks (useRoom, useTimer, etc.)
 │   │   ├── lib/                     # Client API wrappers, types, and client supabase wrappers
-│   │   └── middleware.ts            # Middleware wrapper calling the Backend middleware
-│   ├── next.config.ts               # Configuration mapping the Turbopack compile root
+│   │   └── proxy.ts                # Proxy wrapper calling the Backend proxy
+│   ├── next.config.ts               # Next.js configuration
 │   └── tsconfig.json                # TypeScript aliases mapping @frontend and @backend paths
 ├── package.json                     # Root configuration proxy script executor
 └── ARCHITECTURE.md                  # Detailed architectural overview

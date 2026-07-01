@@ -2,11 +2,11 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
- * Middleware that refreshes the Supabase auth session on every request.
+ * Proxy that refreshes the Supabase auth session on every request.
  * Without this, server components reading the session cookie would see
  * stale or expired tokens, causing random logouts.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

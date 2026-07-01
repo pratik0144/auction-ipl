@@ -588,9 +588,9 @@ The identity model has been upgraded to a secure **Supabase Email/Password Authe
   An database trigger `on_auth_user_created` calls `handle_new_user()` to automatically sync display names on signup.
 * **Refactored useLocalUser Hook:** Transitioned from anonymous `localStorage` UUID generation to retrieving `userId` from `AuthProvider`. Room affinity state (`participantId`, `roomId`) is still persisted in `localStorage` (`auction_user`) to keep users aligned with their rosters.
 
-### 9.2 Server-Side Token Refresh (Next.js Middleware)
+### 9.2 Server-Side Token Refresh (Next.js Proxy)
 
-To maintain session persistence for both Server Components and Client Components, `Frontend/src/middleware.ts` intercept requests:
+To maintain session persistence for both Server Components and Client Components, `Frontend/src/proxy.ts` intercepts requests:
 1. Re-creates the Supabase client using Request/Response headers.
 2. Calls `supabase.auth.getUser()` to trigger session and JWT refreshes.
 3. Automatically synchronized session cookies back to the client's browser.
