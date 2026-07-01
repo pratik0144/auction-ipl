@@ -14,8 +14,9 @@ Run these once in the Supabase **SQL Editor**, in order:
 2. **`005_chat.sql`** — Chat table, `send_chat` RPC, and realtime config for chat.
 3. **`008_auth_profiles.sql`** — Profiles table (`id` FK to `auth.users`), signup trigger to automatically sync new users to the public schema, and initial RLS policies.
 4. **`009_fix_rls.sql`** — Recursion-free RLS policies using `is_room_member(room_id)` helper function. Extends RLS security to authenticated users and handles public room lists for anonymous users.
-5. **`dev_functions.sql`** — `start_auction_dev` (allows starting the auction with a single participant for local testing).
-6. *(optional)* **`004_cron.sql`** — pg_cron safety-net sweeper (`resolve_expired_auctions()` every 60s). Requires the `pg_cron` extension.
+5. **`migrations/010_auto_complete_and_rankings.sql`** — Auto-complete logic when all squads are full, plus the rankings calculation SQL function.
+6. **`dev_functions.sql`** — `start_auction_dev` (allows starting the auction with a single participant for local testing).
+7. *(optional)* **`004_cron.sql`** — pg_cron safety-net sweeper (`resolve_expired_auctions()` every 60s). Requires the `pg_cron` extension.
 
 ---
 
@@ -34,6 +35,7 @@ For an existing database, apply only what you're missing. Files are ordered:
 | `007_room_options.sql` | Adds `rooms.is_public` and `rooms.player_order`, updates `create_room` and seeds default players. |
 | `008_auth_profiles.sql` | **New Auth Hook:** Creates `profiles` table to track display names and triggers profile creation when new users sign up via Supabase auth. |
 | `009_fix_rls.sql` | **RLS & Recursion Fix:** Implements `is_room_member()` helper function to prevent infinite RLS recursion in `room_participants`, grants `authenticated` SELECT access to game state, and configures public room visibility for `anon` users. |
+| `010_auto_complete_and_rankings.sql` | **Auto-Complete & Rankings:** Auto-completes the auction when all participant squads are full, and adds `compute_auction_rankings()` to calculate squad composition, value efficiency, and star power scores. |
 
 ---
 

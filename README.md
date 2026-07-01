@@ -55,7 +55,8 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   │   │   ├── 006_realtime_fix.sql # REPLICA IDENTITY FULL + publication fix (balance sync)
 │   │   │   ├── 007_room_options.sql # is_public, player_order + seed_room_players() ordering
 │   │   │   ├── 008_auth_profiles.sql# Profiles table, auto-insert triggers on signup
-│   │   │   └── 009_fix_rls.sql      # Recursion-free RLS policy configuration using helper functions
+│   │   │   ├── 009_fix_rls.sql      # Recursion-free RLS policy configuration using helper functions
+│   │   │   └── 010_auto_complete_and_rankings.sql # Auto-complete when squads full + ranking formulas
 │   │   ├── combined_migration.sql   # One-shot setup for a fresh database (all tables, functions, catalogs)
 │   │   ├── seed.sql                 # ~100 IPL players (auto-generated from the JSON)
 │   │   ├── dev_functions.sql        # start_auction_dev (solo testing bypass)
@@ -111,6 +112,7 @@ npm install
    * **`Database/supabase/005_chat.sql`** (live chat schema & RPCs)
    * **`Database/supabase/migrations/008_auth_profiles.sql`** (user profile schema & trigger)
    * **`Database/supabase/migrations/009_fix_rls.sql`** (recursion-free auth RLS configuration)
+   * **`Database/supabase/migrations/010_auto_complete_and_rankings.sql`** (auto-complete and winner rankings system)
    * **`Database/supabase/dev_functions.sql`** (solo-testing bypass)
    * See **`Database/supabase/MIGRATIONS.md`** for incremental details.
 3. **Configure Authentication settings in Supabase Dashboard:**
