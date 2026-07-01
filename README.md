@@ -173,3 +173,17 @@ This launches the Next.js application inside `Frontend/` on port `3003` with `NE
 ### D. Post-Auction Summary
 1. **Roster Overview:** Once all players are resolved, the Results dashboard appears.
 2. **Sharing & Exit:** Click "Share Results" to copy a text summary, or "Exit to Home" to return to the landing page.
+
+---
+
+## 📋 Assumptions Made
+
+The technical architecture and gameplay loops of 11Auction are built upon the following key assumptions:
+
+1. **First-to-Reach Database Bidding**: Bids are resolved in the order they arrive at the Supabase database. The system assumes a "first-to-reach" model rather than "first-to-click." If two users click a bid button at the exact same split-second, the network packet that reaches the Supabase PostgreSQL transaction engine first will win.
+2. **Active Browser Resolution**: The application assumes that at least one participant has an active browser session open to trigger the `check_and_resolve` RPC when the round timer expires. If all clients suddenly lose connection, the room relies on a backup `pg_cron` sweeper that runs every 60 seconds to resolve the current player.
+3. **Local Clock Sizing**: The visual countdown ring on the client interface calculates remaining seconds by comparing the local system clock to the player's `ends_at` timestamp. While clock drift is calibrated dynamically against the database response header (`serverOffset`), the system assumes local client clocks are not skewed by hours or manual tampering.
+4. **Immutable Room Settings**: All parameters chosen at room creation (e.g. Purse Budget, Max Squad Size, Timer Seconds, and Player Order Strategy) are assumed to be final and immutable. They cannot be altered once the lobby transitions from `LOBBY` to the active `AUCTION` state.
+5. **Irreversible Bidding**: A bid is assumed to be final and cannot be retracted by the user. There is no "undo" button for bids, simulating the real-time high-pressure conditions of professional IPL auctions.
+6. **Server-Side Trust (No Client-side Validation Trust)**: The system assumes all client-side budget and squad checks are purely cosmetic. Every transaction *must* be re-verified inside the `place_bid` PostgreSQL RPC function to protect database states against modified or malicious API requests.
+
