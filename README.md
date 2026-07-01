@@ -8,6 +8,16 @@
 The application leverages a modern **Serverless Realtime** architecture. The frontend is built on **Next.js 16 (App Router)** and styled with **Tailwind CSS v4** in a **Vercel-inspired dark design system**. The backend is powered by **Supabase** (PostgreSQL database, real-time sync listeners, and security definer database functions).
 
 > **Identity model:** Supabase Email/Password authentication is integrated. Users register or log in via a toggle-style sign-in/sign-up page (`/auth`). Authenticated sessions are synchronized across the application via React Context (`AuthProvider.tsx`) and cookies are kept fresh on both server/client components via the Next.js Proxy (request interceptor). A dev-only quick login dashboard is available for developers on localhost.
+>
+> 🔑 **Developer / Interviewer Test Credentials:**
+> To test the application locally or run quick-login authentication, you can use **Sign In** or **Sign Up** with any of the following pre-seeded test accounts:
+> * **Email addresses:**
+>   * `test@test.com`
+>   * `test@test1.com`
+>   * `test@test2.com`
+>   * `test@test3.com`
+> * **Password (same for all):** `123789`
+> * *Note: On localhost, the `/auth` page presents a quick-login grid populated with these credentials for instant sign-in.*
 
 ---
 
