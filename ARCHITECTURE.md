@@ -236,7 +236,7 @@ When the auction starts, `seed_room_players(room_id, strategy)` populates
 | `end_auction_early()` | Room admin only | End auction, mark remaining as UNSOLD |
 | `send_chat()` | Room participants | Post a chat message |
 
-### Client read helpers (`src/lib/api.ts`)
+### Client read helpers (`Frontend/src/lib/api.ts`)
 
 Direct `anon` SELECTs (not RPCs): `getRoomSnapshot()`, `getRoomResults()`,
 `getRoomChats()`, and discovery — `listPublicRooms()` (public LOBBY rooms with
@@ -286,28 +286,37 @@ participant counts) and `listMyRooms(userId)` (rooms the user has joined).
 
 ```
 11auc/
-├── supabase/
-│   ├── migrations/
-│   │   ├── 001_schema.sql          # Tables, enums, indexes
-│   │   ├── 002_rls_policies.sql    # Row-level security
-│   │   ├── 003_functions.sql       # RPC functions
-│   │   └── 004_cron.sql            # pg_cron safety net
-│   └── seed.sql                    # Player catalog data
-├── src/
-│   ├── lib/
-│   │   ├── types.ts                # TypeScript interfaces
-│   │   ├── api.ts                  # Client-side RPC service
-│   │   ├── utils.ts                # Price formatting, timer helpers
-│   │   └── supabase/
-│   │       ├── client.ts           # Browser client (singleton)
-│   │       ├── server.ts           # Server client (cookies)
-│   │       └── realtime.ts         # Realtime subscription helpers
-│   └── app/
-│       └── api/
-│           └── rooms/
-│               ├── route.ts        # POST: create room
-│               └── [id]/
-│                   └── route.ts    # GET: room snapshot
-├── .env.example                    # Environment variables template
-└── ARCHITECTURE.md                 # This file
+├── Frontend/                        # Next.js app
+│   ├── src/
+│   │   ├── lib/
+│   │   │   ├── types.ts             # TypeScript interfaces
+│   │   │   ├── api.ts               # Client-side RPC service
+│   │   │   ├── utils.ts             # Price formatting, timer helpers
+│   │   │   └── supabase/
+│   │   │       ├── client.ts        # Browser client (singleton)
+│   │   │       ├── server.ts        # Server client (cookies)
+│   │   │       └── realtime.ts      # Realtime subscription helpers
+│   │   └── app/
+│   │       └── api/
+│   │           └── rooms/
+│   │               ├── route.ts     # POST: create room
+│   │               └── [id]/
+│   │                   └── route.ts # GET: room snapshot
+│   ├── package.json                 # Next.js dependencies
+│   ├── tsconfig.json                # TypeScript config
+│   ├── next.config.ts               # Next.js config
+│   └── .env.example                 # Environment variables template
+├── Backend/                         # Supabase Edge Functions / API
+│   └── ...
+├── Database/
+│   ├── supabase/
+│   │   ├── migrations/
+│   │   │   ├── 001_schema.sql       # Tables, enums, indexes
+│   │   │   ├── 002_rls_policies.sql # Row-level security
+│   │   │   ├── 003_functions.sql    # RPC functions
+│   │   │   └── 004_cron.sql         # pg_cron safety net
+│   │   └── seed.sql                 # Player catalog data
+│   └── data-extraction/             # Player dataset tooling
+│       └── ...
+└── ARCHITECTURE.md                  # This file
 ```

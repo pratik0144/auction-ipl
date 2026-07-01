@@ -52,7 +52,7 @@ This document serves as the absolute, single-source-of-truth technical reference
 
 All database models reside in the `public` schema. This section details the PostgreSQL table definitions alongside their corresponding TypeScript definitions.
 
-### A. Core TypeScript Definitions (`src/lib/types.ts`)
+### A. Core TypeScript Definitions (`Frontend/src/lib/types.ts`)
 ```typescript
 export type RoomStatus = 'LOBBY' | 'AUCTION' | 'PAUSED' | 'COMPLETED';
 export type AuctionPlayerStatus = 'PENDING' | 'ACTIVE' | 'SOLD' | 'UNSOLD';
@@ -127,7 +127,7 @@ export interface ChatMessage {
 }
 ```
 
-### B. PostgreSQL Schema Implementations (`supabase/migrations/001_schema.sql` & `supabase/005_chat.sql`)
+### B. PostgreSQL Schema Implementations (`Database/supabase/migrations/001_schema.sql` & `Database/supabase/005_chat.sql`)
 
 ```sql
 -- Enums
@@ -412,7 +412,7 @@ Increments are rounded to prevent uneven bid values:
 * Valuations $< 1000\text{ Lakhs}$: Round to the nearest multiple of $25\text{L}$
 * Valuations $\ge 1000\text{ Lakhs}$: Round to the nearest multiple of $50\text{L}$
 
-### Bidding Options Solver Algorithm (`src/lib/bidCalculator.ts`)
+### Bidding Options Solver Algorithm (`Frontend/src/lib/bidCalculator.ts`)
 ```typescript
 export interface BidOption {
   increment: number;
@@ -495,7 +495,7 @@ The application locks layout dimensions using CSS configurations:
 * **Flex Configurations:** Middle container grids use `flex flex-col min-h-0` to size content dynamically.
 * **Component Constraints:** `shrink-0` is applied to static blocks (such as player cards, action timers, and bidding buttons) to ensure scrollable components (like the chat feed) do not push them out of the viewport.
 
-### B. Centered Bid Timeline Centering Algorithm (`src/components/auction/BidHistory.tsx`)
+### B. Centered Bid Timeline Centering Algorithm (`Frontend/src/components/auction/BidHistory.tsx`)
 Bids are mapped outwards from the center to ensure the latest bid is always highlighted.
 ```
 5 UI Slots: [ Slot 0 ] [ Slot 1 ] [ Slot 2 (Center) ] [ Slot 3 ] [ Slot 4 ]
@@ -509,7 +509,7 @@ Bids are mapped outwards from the center to ensure the latest bid is always high
    * `Slot 4` (Far Right) $\leftarrow$ Bid index 4
 3. Empty positions render invisible spacers (`w-20` divs) to keep the display centered.
 
-### C. Design Tokens & Keyframe Animations (`src/app/globals.css`)
+### C. Design Tokens & Keyframe Animations (`Frontend/src/app/globals.css`)
 ```css
 @theme inline {
   --color-void: #0A0A0F;
@@ -570,7 +570,7 @@ Bids are mapped outwards from the center to ensure the latest bid is always high
 
 ## 🆕 9. Session Update — v1.3.0 (Supabase Email/Password Auth & RLS Integration)
 
-> The sections above describe the original scaffold and incremental updates. Where they conflict with this section, **this section wins**. See `CHANGELOG.md` for the full list and `supabase/MIGRATIONS.md` for DB apply order.
+> The sections above describe the original scaffold and incremental updates. Where they conflict with this section, **this section wins**. See `CHANGELOG.md` for the full list and `Database/supabase/MIGRATIONS.md` for DB apply order.
 
 ### 9.1 Identity, Profiles, and Authentication
 
@@ -590,7 +590,7 @@ The identity model has been upgraded to a secure **Supabase Email/Password Authe
 
 ### 9.2 Server-Side Token Refresh (Next.js Middleware)
 
-To maintain session persistence for both Server Components and Client Components, `src/middleware.ts` intercept requests:
+To maintain session persistence for both Server Components and Client Components, `Frontend/src/middleware.ts` intercept requests:
 1. Re-creates the Supabase client using Request/Response headers.
 2. Calls `supabase.auth.getUser()` to trigger session and JWT refreshes.
 3. Automatically synchronized session cookies back to the client's browser.

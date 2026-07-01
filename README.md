@@ -1,6 +1,6 @@
 # 🏏 11Auction - High-Fidelity Realtime IPL Fantasy Cricket Auction
 
-**11Auction** is an IPL-themed live multiplayer cricket auction application. Built for groups of 3–5 users, it simulates a real-world sports auction experience where participants bid on a randomized pool of ~100 IPL players under strict purse budget and squad size constraints.
+**11Auction** is an IPL-themed live multiplayer cricket auction application. Built for groups of 3–5 users, it simulates a real-world sports auction experience where participants bid on a randomized pool of ~90 real IPL players under strict purse budget and squad size constraints.
 
 The application leverages a modern **Serverless Realtime** architecture. The frontend is built on **Next.js 16 (App Router)** and styled with **Tailwind CSS v4** in a **Vercel-inspired dark design system**. The backend is powered by **Supabase** (PostgreSQL database, real-time sync listeners, and security definer database functions).
 
@@ -44,69 +44,54 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 
 ```text
 11auc/
-├── data-extraction/                 # Player dataset + tooling
-│   ├── ipl_2026_auction_dataset.json # ~100 real IPL players (source of truth)
-│   └── generate_seed.mjs            # Regenerates supabase/seed.sql from the JSON
-├── supabase/                        # Database schemas and functions
-│   ├── migrations/
-│   │   ├── 001_schema.sql           # Core tables (rooms, players, room_players, bids)
-│   │   ├── 002_rls_policies.sql     # (legacy, auth-based — superseded; see MIGRATIONS.md)
-│   │   ├── 003_functions.sql        # Database RPC functions (place_bid, check_and_resolve, etc.)
-│   │   ├── 004_cron.sql             # pg_cron periodic sweeper configuration
-│   │   ├── 005_chat.sql             # Live chat tables and sending procedures
-│   │   ├── 006_realtime_fix.sql     # REPLICA IDENTITY FULL + publication fix (balance sync)
-│   │   ├── 007_room_options.sql     # is_public, player_order + seed_room_players() ordering
-│   │   ├── 008_auth_profiles.sql    # NEW: Profiles table, auto-insert triggers on signup
-│   │   └── 009_fix_rls.sql          # NEW: Recursion-free RLS policy configuration using helper functions
-│   ├── combined_migration.sql       # One-shot setup for a fresh database (all tables, functions, catalogs)
-│   ├── seed.sql                     # ~100 IPL players (auto-generated from the JSON)
-│   ├── dev_functions.sql            # start_auction_dev (solo testing bypass)
-│   └── MIGRATIONS.md                # Apply order + what each migration does
-├── src/
-│   ├── app/                         # App Router Pages & API routes
-│   │   ├── api/rooms/route.ts        # POST: server-side room initialization wrapper
-│   │   ├── api/rooms/[id]/route.ts   # GET: room snapshot resolver
-│   │   ├── auth/page.tsx            # NEW: Sign In / Sign Up toggle view + Local Dev logins
-│   │   ├── page.tsx                 # Landing: hero + tournament selector + user profile/sign-out header
-│   │   ├── rooms/page.tsx           # Rooms hub: create/join, public rooms, your rooms
-│   │   ├── create/page.tsx          # Create Room (fixed-option selectors + toggles)
-│   │   ├── join/page.tsx            # Join by code
-│   │   ├── join/[code]/page.tsx     # Auto-filled join (invite link target)
-│   │   ├── room/[id]/page.tsx       # Realtime lobby / auction / results wrapper + header + sign out
-│   │   ├── globals.css              # Vercel-inspired Tailwind v4 design system
-│   │   └── layout.tsx               # App layout wrapped with AuthProvider, metadata, fonts
-│   ├── components/
-│   │   ├── AuthProvider.tsx         # NEW: Auth state listener & React Context provider
-│   │   ├── auction/
-│   │   │   ├── AdminToolbar.tsx     # Pause/resume/skip/end (admin-only, in header)
-│   │   │   ├── AuctionView.tsx      # Fixed three-column live auction console layout
-│   │   │   ├── BalancePanel.tsx     # Budget bar, squad count, hover-to-peek next player
-│   │   │   ├── BidButtons.tsx       # Dynamic bidding increment grid
-│   │   │   ├── BidHistory.tsx       # Center-anchored latest-bid history
-│   │   │   ├── ChatPanel.tsx        # Localized chat scroll feed and sender input
-│   │   │   ├── CountdownTimer.tsx   # Single-ring SVG timer + inline SOLD/UNSOLD
-│   │   │   ├── MySquad.tsx          # Personal roster slots (with player images)
-│   │   │   ├── PlayerCard.tsx       # Active player profile (name–team, image, rating)
-│   │   │   ├── PlayerImage.tsx      # Headshot with initials fallback (shared)
-│   │   │   └── TeamsPanel.tsx       # Accordion of other teams' budgets and rosters
-│   │   ├── lobby/LobbyView.tsx      # Pre-auction lobby (code, rules, participants)
-│   │   └── results/ResultsView.tsx  # Post-auction summary + share + Exit to Home
-│   ├── hooks/
-│   │   ├── useRoom.ts               # Snapshot fetch + realtime reconciliation
-│   │   ├── useParticipant.ts        # Derives current participant / admin / myPlayers
-│   │   ├── useLocalUser.ts          # Integrates with AuthProvider for userId; maintains room affinity in local storage
-│   │   └── useTimer.ts              # requestAnimationFrame timer (uses real duration)
-│   ├── lib/
-│   │   ├── supabase/{client,server,realtime}.ts
-│   │   ├── api.ts                   # Client-side RPC + discovery service wrappers
-│   │   ├── bidCalculator.ts         # Bidding increment math and fallbacks
-│   │   ├── types.ts                 # TS typings representing the database schemas
-│   │   └── utils.ts                 # Currency and text formatting utilities
-│   ├── middleware.ts                # NEW: Next.js middleware to refresh Supabase cookies
-├── package.json
-├── tsconfig.json
-├── ARCHITECTURE.md                  # Detailed architectural overview
-└── next.config.ts
+├── Database/                        # Database schemas, seeds, data extraction scripts
+│   ├── supabase/
+│   │   ├── migrations/
+│   │   │   ├── 001_schema.sql       # Core tables (rooms, players, room_players, bids)
+│   │   │   ├── 002_rls_policies.sql # (legacy, auth-based — superseded; see MIGRATIONS.md)
+│   │   │   ├── 003_functions.sql    # Database RPC functions (place_bid, check_and_resolve, etc.)
+│   │   │   ├── 004_cron.sql         # pg_cron periodic sweeper configuration
+│   │   │   ├── 005_chat.sql         # Live chat tables and sending procedures
+│   │   │   ├── 006_realtime_fix.sql # REPLICA IDENTITY FULL + publication fix (balance sync)
+│   │   │   ├── 007_room_options.sql # is_public, player_order + seed_room_players() ordering
+│   │   │   ├── 008_auth_profiles.sql# Profiles table, auto-insert triggers on signup
+│   │   │   └── 009_fix_rls.sql      # Recursion-free RLS policy configuration using helper functions
+│   │   ├── combined_migration.sql   # One-shot setup for a fresh database (all tables, functions, catalogs)
+│   │   ├── seed.sql                 # ~100 IPL players (auto-generated from the JSON)
+│   │   ├── dev_functions.sql        # start_auction_dev (solo testing bypass)
+│   │   └── MIGRATIONS.md            # Apply order + what each migration does
+│   └── data-extraction/             # Player dataset + tooling
+│       ├── ipl_2026_auction_dataset.json # ~90 real IPL players (source of truth)
+│       └── generate_seed.mjs        # Regenerates seed.sql from the JSON
+├── Backend/                         # Actual backend and server-side logic
+│   ├── api/rooms/route.ts           # POST: server-side room initialization logic
+│   ├── api/rooms/[id]/route.ts      # GET: room snapshot resolver logic
+│   └── middleware.ts                # Server-side authentication and cookie refresh logic
+├── Frontend/                        # Frontend UI and Next.js compiler application
+│   ├── public/                      # Static assets and images
+│   ├── src/
+│   │   ├── app/                     # App Router Pages & API routes
+│   │   │   ├── api/rooms/route.ts   # API wrapper exporting POST handler from Backend
+│   │   │   ├── api/rooms/[id]/route.ts # API wrapper exporting GET handler from Backend
+│   │   │   ├── auth/page.tsx        # Sign In / Sign Up view + Local Dev logins
+│   │   │   ├── page.tsx             # Landing: hero + tournament selector + user profile header
+│   │   │   ├── rooms/page.tsx       # Rooms hub: create/join, public rooms, your rooms
+│   │   │   ├── create/page.tsx      # Create Room (fixed-option selectors + toggles)
+│   │   │   ├── join/page.tsx        # Join by code
+│   │   │   ├── join/[code]/page.tsx # Auto-filled join (invite link target)
+│   │   │   ├── room/[id]/page.tsx   # Realtime lobby / auction / results wrapper
+│   │   │   └── globals.css          # Vercel-inspired Tailwind v4 design system
+│   │   ├── components/
+│   │   │   ├── AuthProvider.tsx     # Auth state listener & React Context provider
+│   │   │   ├── auction/             # Auction UI components (AuctionView, timer, chat, etc.)
+│   │   │   └── lobby/LobbyView.tsx  # Pre-auction lobby waiting room
+│   │   ├── hooks/                   # Custom client-side hooks (useRoom, useTimer, etc.)
+│   │   ├── lib/                     # Client API wrappers, types, and client supabase wrappers
+│   │   └── middleware.ts            # Middleware wrapper calling the Backend middleware
+│   ├── next.config.ts               # Configuration mapping the Turbopack compile root
+│   └── tsconfig.json                # TypeScript aliases mapping @frontend and @backend paths
+├── package.json                     # Root configuration proxy script executor
+└── ARCHITECTURE.md                  # Detailed architectural overview
 ```
 
 ---
@@ -114,7 +99,7 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 ## ⚙️ Getting Started & Local Setup
 
 ### 1. Project Installation
-Install Node packages locally:
+Install Node packages locally from the root folder (runs the command inside `Frontend` using proxy config):
 ```bash
 npm install
 ```
@@ -122,12 +107,12 @@ npm install
 ### 2. Connect Supabase Database
 1. Create a project on the [Supabase Dashboard](https://supabase.com/).
 2. **Fresh setup (recommended):** open the Supabase SQL Editor and execute:
-   * **`supabase/combined_migration.sql`** (base schema, catalogs, seed, core RPCs)
-   * **`supabase/migrations/005_chat.sql`** (live chat schema & RPCs)
-   * **`supabase/migrations/008_auth_profiles.sql`** (user profile schema & trigger)
-   * **`supabase/migrations/009_fix_rls.sql`** (recursion-free auth RLS configuration)
-   * **`supabase/dev_functions.sql`** (solo-testing bypass)
-   * See **`supabase/MIGRATIONS.md`** for incremental details.
+   * **`Database/supabase/combined_migration.sql`** (base schema, catalogs, seed, RPCs)
+   * **`Database/supabase/005_chat.sql`** (live chat schema & RPCs)
+   * **`Database/supabase/migrations/008_auth_profiles.sql`** (user profile schema & trigger)
+   * **`Database/supabase/migrations/009_fix_rls.sql`** (recursion-free auth RLS configuration)
+   * **`Database/supabase/dev_functions.sql`** (solo-testing bypass)
+   * See **`Database/supabase/MIGRATIONS.md`** for incremental details.
 3. **Configure Authentication settings in Supabase Dashboard:**
    * Go to **Authentication** -> **Settings**.
    * Under **User Sign Up**, turn **OFF** "Confirm Email" / "Enable email confirmations". This allows new users to register and log in instantly without waiting for an email verification token.
@@ -139,14 +124,12 @@ npm install
      * `test@test2.com`
      * `test@test3.com`
      * These accounts will automatically sign up on first click if they do not exist.
-5. The players catalog is seeded by the combined migration. To re-seed
-   independently, run `supabase/seed.sql` (regenerate it from the JSON with
-   `node data-extraction/generate_seed.mjs`).
-6. Copy the environment template:
+5. The players catalog is seeded by the combined migration. To re-seed independently, run `Database/supabase/seed.sql` (regenerate it from the JSON with `node Database/data-extraction/generate_seed.mjs`).
+6. Copy the environment template inside `Frontend/`:
    ```bash
-   cp .env.example .env.local
+   cp Frontend/.env.example Frontend/.env.local
    ```
-7. Open `.env.local` and add your database variables:
+7. Open `Frontend/.env.local` and add your database variables:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key
@@ -163,7 +146,7 @@ To run locally with bypass controls enabled (allows launching the auction with f
 ```bash
 npm run dev:test
 ```
-This launches the application on port `3003` with `NEXT_PUBLIC_DEV_MODE=true`.
+This launches the Next.js application inside `Frontend/` on port `3003` with `NEXT_PUBLIC_DEV_MODE=true`.
 
 ---
 
