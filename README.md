@@ -63,11 +63,11 @@ The application leverages a modern **Serverless Realtime** architecture. The fro
 │   └── data-extraction/             # Player dataset + tooling
 │       ├── ipl_2026_auction_dataset.json # ~90 real IPL players (source of truth)
 │       └── generate_seed.mjs        # Regenerates seed.sql from the JSON
-├── Backend/                         # Actual backend and server-side logic
-│   ├── api/rooms/route.ts           # POST: server-side room initialization logic
-│   ├── api/rooms/[id]/route.ts      # GET: room snapshot resolver logic
-│   └── middleware.ts                # Server-side authentication and cookie refresh logic
 ├── Frontend/                        # Frontend UI and Next.js compiler application
+│   ├── Backend/                     # Shared server-side logic (inside Frontend for Vercel builds)
+│   │   ├── api/rooms/route.ts       # POST: server-side room initialization logic
+│   │   ├── api/rooms/[id]/route.ts  # GET: room snapshot resolver logic
+│   │   └── middleware.ts            # Server-side authentication and cookie refresh logic
 │   ├── public/                      # Static assets and images
 │   ├── src/
 │   │   ├── app/                     # App Router Pages & API routes

@@ -287,6 +287,8 @@ participant counts) and `listMyRooms(userId)` (rooms the user has joined).
 ```
 11auc/
 ├── Frontend/                        # Next.js app
+│   ├── Backend/                     # Shared server-side logic (inside Frontend for Vercel builds)
+│   │   └── ...
 │   ├── src/
 │   │   ├── lib/
 │   │   │   ├── types.ts             # TypeScript interfaces
@@ -306,8 +308,6 @@ participant counts) and `listMyRooms(userId)` (rooms the user has joined).
 │   ├── tsconfig.json                # TypeScript config
 │   ├── next.config.ts               # Next.js config
 │   └── .env.example                 # Environment variables template
-├── Backend/                         # Supabase Edge Functions / API
-│   └── ...
 ├── Database/
 │   ├── supabase/
 │   │   ├── migrations/
