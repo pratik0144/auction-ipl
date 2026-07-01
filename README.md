@@ -1,4 +1,5 @@
 # 🏏 11Auction - High-Fidelity Realtime IPL Fantasy Cricket Auction
+![alt text](demo-working-imgs/Landing-page.png)
 
 ![alt text](demo-working-imgs/Auction-room.png)
 
