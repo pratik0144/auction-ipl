@@ -1,8 +1,8 @@
-import { middleware as backendMiddleware } from '@backend/middleware';
+import { proxy as backendProxy } from '@backend/proxy';
 import type { NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  return backendMiddleware(request);
+export async function proxy(request: NextRequest) {
+  return backendProxy(request);
 }
 
 export const config = {
